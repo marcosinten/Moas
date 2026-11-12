@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#140b1f">
+<meta name="color-scheme" content="dark">
+<title>Panel del fandom</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ff5c9d'%3E%3Cpath d='M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5'/%3E%3C/svg%3E">
+<link rel="preload" href="/fonts/hanken-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="orbs" aria-hidden="true"><i class="o1"></i><i class="o2"></i><i class="o3"></i><i class="b b1"></i><i class="b b2"></i><i class="b b3"></i><i class="b b4"></i><i class="b b5"></i></div>
+
+<!-- Acceso -->
+<main id="login" class="login" hidden>
+  <section class="panel">
+    <span class="mark"><svg class="ic fill"><use href="/icons.svg#i-heart"/></svg></span>
+    <div><h1>Panel del fandom</h1><p class="lede">Entra con tu usuario de administradora.</p></div>
+    <form id="lform" novalidate>
+      <label class="field"><span>Usuario</span>
+        <span class="input-ic"><svg class="ic"><use href="/icons.svg#i-user"/></svg><input class="input" id="lu" autocomplete="username" autocapitalize="none" spellcheck="false" required></span></label>
+      <label class="field"><span>Contraseña</span>
+        <span class="input-ic"><svg class="ic"><use href="/icons.svg#i-lock"/></svg><input class="input" id="lp" type="password" autocomplete="current-password" required>
+          <button type="button" class="icon-btn" id="lpeek" aria-label="Mostrar contraseña"><svg class="ic"><use href="/icons.svg#i-eye"/></svg></button></span></label>
+      <p class="form-err" id="lerr" role="alert"></p>
+      <button class="btn primary" id="lgo" type="submit">Entrar</button>
+    </form>
+  </section>
+</main>
+
+<!-- App -->
+<div id="app" hidden>
+  <header class="topbar glass">
+    <button class="brand" id="home" aria-label="Ir al inicio"><span class="mark"><svg class="ic fill"><use href="/icons.svg#i-heart"/></svg></span>Fandom</button>
+    <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
+    <div class="top-actions">
+      <button class="icon-btn bell" id="bell" aria-label="Notificaciones" aria-expanded="false"><svg class="ic"><use href="/icons.svg#i-bell"/></svg><span class="count" id="bellc" hidden></span></button>
+      <div class="me" id="me"></div>
+      <button class="icon-btn" id="out" aria-label="Cerrar sesión" title="Cerrar sesión"><svg class="ic"><use href="/icons.svg#i-log-out"/></svg></button>
+    </div>
+  </header>
+  <main id="view" class="page"></main>
+</div>
+
+<aside id="notes" class="pop" aria-label="Notificaciones" inert></aside>
+<div id="selbar" class="selbar" role="toolbar" aria-label="Acciones de selección" inert>
+  <span class="sel-count" id="selcount" aria-live="polite"></span>
+  <button class="btn ghost" id="selall" type="button"></button>
+  <span class="sel-actions" id="selacts"></span>
+  <button class="icon-btn" id="selx" type="button" aria-label="Cancelar selección" title="Cancelar selección"><svg class="ic"><use href="/icons.svg#i-x"/></svg></button>
+</div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<!-- Integrante -->
+<dialog id="mdlg" aria-labelledby="mdt"><form class="dlg" id="mform" novalidate>
+  <header class="dlg-h"><span class="tile-ic"><svg class="ic"><use href="/icons.svg#i-user-round"/></svg></span><h2 id="mdt"></h2></header>
+  <label class="field"><span>Apodo o nombre</span><input class="input" id="m_n" maxlength="40" autocomplete="off" required></label>
+  <div class="row2">
+    <label class="field"><span>Nacimiento <small>(opcional)</small></span><input class="input" id="m_b" type="date"></label>
+    <label class="field"><span>Ingreso al grupo</span><input class="input" id="m_j" type="date"></label>
+  </div>
+  <label class="field"><span>País <small>(opcional)</small></span><input class="input" id="m_c" maxlength="40" list="countries" autocomplete="off"></label>
+  <datalist id="countries"></datalist>
+  <label class="switch" id="m_al"><input type="checkbox" id="m_a"><span class="track"></span>Activo en el grupo</label>
+  <p class="form-err" role="alert"></p>
+  <footer class="dlg-f"><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn primary">Guardar</button></footer>
+</form></dialog>
+
+<!-- Dinámica / votación -->
+<dialog id="edlg" aria-labelledby="edt"><form class="dlg" id="eform" novalidate>
+  <header class="dlg-h"><span class="tile-ic" id="e_ic"></span><h2 id="edt"></h2></header>
+  <label class="field"><span>Nombre</span><input class="input" id="e_n" maxlength="80" autocomplete="off" required></label>
+  <div class="row2">
+    <label class="field"><span>Fecha</span><input class="input" id="e_d" type="date" required></label>
+    <label class="field"><span>Hora de apertura <small>(opcional)</small></span><input class="input" id="e_t" type="time"></label>
+  </div>
+  <label class="field"><span>Descripción <small>(opcional)</small></span><textarea class="input" id="e_s" rows="3" maxlength="1000"></textarea></label>
+  <label class="field"><span>Supervisora</span><select class="input" id="e_p"></select></label>
+  <div class="field"><span>Colaboradoras <small>(reciben una invitación)</small></span><div class="checks" id="e_c"></div></div>
+  <p class="form-err" role="alert"></p>
+  <footer class="dlg-f"><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn primary">Guardar</button></footer>
+</form></dialog>
+
+<!-- Administradora -->
+<dialog id="adlg" aria-labelledby="adt"><form class="dlg" id="aform" novalidate>
+  <header class="dlg-h"><span class="tile-ic"><svg class="ic"><use href="/icons.svg#i-shield-check"/></svg></span><h2 id="adt"></h2></header>
+  <label class="field"><span>Nombre visible</span><input class="input" id="a_n" maxlength="60" autocomplete="off" required></label>
+  <label class="field"><span>Usuario <small>(a-z, 0-9, punto, guion; 3 a 30)</small></span><input class="input" id="a_u" maxlength="30" autocomplete="off" autocapitalize="none" spellcheck="false" required></label>
+  <label class="field"><span>Rol</span><select class="input" id="a_r"><option value="admin">Administradora</option><option value="superadmin">Superadmin</option></select></label>
+  <label class="switch" id="a_al"><input type="checkbox" id="a_a"><span class="track"></span>Cuenta activa</label>
+  <p class="form-err" role="alert"></p>
+  <footer class="dlg-f"><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn primary">Guardar</button></footer>
+</form></dialog>
+
+<!-- Cambio obligatorio de contraseña -->
+<dialog id="pdlg" aria-labelledby="pdt" data-lock><form class="dlg" id="pform" novalidate>
+  <header class="dlg-h"><span class="tile-ic"><svg class="ic"><use href="/icons.svg#i-lock"/></svg></span><h2 id="pdt">Elige tu contraseña</h2></header>
+  <p class="txt">Es tu primera vez. Escribe la clave temporal y crea una propia de 8 caracteres o más.</p>
+  <label class="field"><span>Clave temporal</span><input class="input" id="p_c" type="password" autocomplete="current-password" required></label>
+  <label class="field"><span>Contraseña nueva</span><input class="input" id="p_n" type="password" autocomplete="new-password" minlength="8" required></label>
+  <p class="form-err" role="alert"></p>
+  <footer class="dlg-f"><button type="submit" class="btn primary">Guardar contraseña</button></footer>
+</form></dialog>
+
+<!-- Confirmación -->
+<dialog id="cdlg" aria-labelledby="c_t"><form class="dlg" method="dialog">
+  <header class="dlg-h"><span class="tile-ic" id="c_ic"></span><h2 id="c_t"></h2></header>
+  <div class="txt" id="c_b"></div>
+  <footer class="dlg-f"><button class="btn" value="cancel">Cancelar</button><button class="btn" id="c_ok" value="ok"></button></footer>
+</form></dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>

@@ -12,16 +12,18 @@ const dup=async(n,id)=>(await db.all('SELECT nickname FROM members WHERE id<>$1'
 exports.register=({app})=>{
   app.get('/api/members',requireAuth,ah(async(req,res)=>{
     const q=v.clean(String(req.query.q||''),40),c=v.clean(String(req.query.country||''),40),w=[],a=[];
-    if(q){a.push('%'+q.replace(/[%_]/g,'')+'%');w.push(`nickname ILIKE $${a.length}`);}
-    if(c){a.push(c);w.push(`country=$${a.length}`);}
-    if(req.query.inactive!=='1') w.push('active=1');
-    res.json(await db.all(`SELECT id,nickname,birth_date,country,joined_at,active FROM members ${w.length?'WHERE '+w.join(' AND '):''} ORDER BY lower(nickname)`,a));
+    if(q){a.push('%'+q.replace(/[%_]/g,'')+'%');w.push(`m.nickname ILIKE $${a.length}`);}
+    if(c){a.push(c);w.push(`m.country=$${a.length}`);}
+    if(req.query.inactive!=='1') w.push('m.active=1');
+    res.json(await db.all(`SELECT m.id,m.nickname,m.birth_date,m.country,m.joined_at,m.active,m.created_by,a.display_name creator_name
+      FROM members m LEFT JOIN admins a ON a.id=m.created_by
+      ${w.length?'WHERE '+w.join(' AND '):''} ORDER BY lower(m.nickname)`,a));
   }));
   app.get('/api/members/countries',requireAuth,ah(async(req,res)=>res.json((await db.all("SELECT DISTINCT country FROM members WHERE country IS NOT NULL ORDER BY country")).map(r=>r.country))));
   app.post('/api/members',requireAuth,ah(async(req,res)=>{
     const p=parse(req.body); if(p.e.length) return res.status(400).json({error:p.e.join('. ')});
     if(await dup(p.nickname)) return res.status(409).json({error:'Ya existe un integrante con ese apodo'});
-    const r=await db.one('INSERT INTO members(nickname,birth_date,country,joined_at) VALUES($1,$2,$3,$4) RETURNING id',[p.nickname,p.birth,p.country,p.joined]);
+    const r=await db.one('INSERT INTO members(nickname,birth_date,country,joined_at,created_by) VALUES($1,$2,$3,$4,$5) RETURNING id',[p.nickname,p.birth,p.country,p.joined,req.admin.id]);
     res.status(201).json({id:r.id});
   }));
   app.patch('/api/members/:id',requireAuth,ah(async(req,res)=>{

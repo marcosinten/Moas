@@ -288,7 +288,8 @@ function memberCard(m) {
   const a = age(m.birth_date), bday = m.birth_date && pd(m.birth_date).m === new Date().getMonth() + 1;
   const c = h('article', { class: 'card member' + (m.active ? '' : ' off'), tabindex: 0 }, avatar(m.nickname),
     h('div', { class: 'who' }, h('h3', { title: m.nickname }, m.nickname),
-      h('div', { class: 'meta' }, m.country ? h('span', {}, icon('globe'), m.country) : null, m.birth_date ? h('span', {}, icon('cake'), `${fd(m.birth_date)}${a != null ? ` (${a} años)` : ''}`) : null),
+      (m.country || m.birth_date) ? h('div', { class: 'meta' }, m.country ? h('span', {}, icon('globe'), m.country) : null, m.birth_date ? h('span', {}, icon('cake'), `${fd(m.birth_date)}${a != null ? ` (${a} años)` : ''}`) : null) : null,
+      m.creator_name ? h('div', { class: 'meta' }, h('span', {}, icon('user'), `Agregado por: ${m.creator_name}`)) : null,
       h('div', { class: 'badges' }, !m.active ? h('span', { class: 'badge b-bad' }, icon('ban'), 'De baja') : null, bday ? h('span', { class: 'badge b-rose' }, icon('cake'), 'Cumple este mes') : null)),
     h('div', { class: 'card-actions' },
       h('button', { class: 'icon-btn', 'aria-label': `Editar a ${m.nickname}`, title: 'Editar', onclick: e => { e.stopPropagation(); openMember(m); } }, icon('pencil')),

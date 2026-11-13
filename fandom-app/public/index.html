@@ -38,7 +38,7 @@
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
     <div class="top-actions">
       <button class="icon-btn bell" id="bell" aria-label="Notificaciones" aria-expanded="false"><svg class="ic"><use href="/icons.svg#i-bell"/></svg><span class="count" id="bellc" hidden></span></button>
-      <div class="me" id="me"></div>
+      <button type="button" class="me" id="me" aria-label="Editar mi perfil"></button>
       <button class="icon-btn" id="out" aria-label="Cerrar sesión" title="Cerrar sesión"><svg class="ic"><use href="/icons.svg#i-log-out"/></svg></button>
     </div>
   </header>
@@ -55,6 +55,26 @@
 <div id="toasts" class="toasts" aria-live="polite"></div>
 
 <!-- Integrante -->
+<dialog id="profile-dialog" aria-labelledby="profile-title">
+  <form class="dlg" id="profile-form">
+    <header class="dlg-h"><span id="profile-preview"></span><h2 id="profile-title">Mi perfil</h2></header>
+    <label class="field"><span>Nombre visible</span><input class="input" id="profile-name" maxlength="60" required></label>
+    <div class="row2">
+      <label class="field"><span>Fecha de nacimiento</span><input class="input" id="profile-birth" type="date" min="1900-01-01"><small id="profile-age" aria-live="polite"></small></label>
+      <label class="field"><span>País</span><input class="input" id="profile-country" maxlength="40"></label>
+    </div>
+    <label class="field"><span>Bias</span><input class="input" id="profile-bias" maxlength="60"></label>
+    <label class="field"><span>Foto de perfil</span><input class="input" id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
+    <label class="chk"><input id="profile-remove" type="checkbox">Quitar foto actual</label>
+    <label class="field"><span>Color de tarjetas</span><select class="input" id="profile-palette">
+      <option value="default">Original</option><option value="rose">Rosa pastel</option>
+      <option value="lavender">Lavanda</option><option value="mint">Menta</option><option value="peach">Durazno</option>
+    </select></label>
+    <p class="form-err" role="alert"></p>
+    <footer class="dlg-f"><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn primary">Guardar perfil</button></footer>
+  </form>
+</dialog>
+
 <dialog id="mdlg" aria-labelledby="mdt"><form class="dlg" id="mform" novalidate>
   <header class="dlg-h"><span class="tile-ic"><svg class="ic"><use href="/icons.svg#i-user-round"/></svg></span><h2 id="mdt"></h2></header>
   <label class="field"><span>Apodo o nombre</span><input class="input" id="m_n" maxlength="40" autocomplete="off" required></label>
@@ -63,6 +83,7 @@
     <label class="field"><span>Ingreso al grupo</span><input class="input" id="m_j" type="date"></label>
   </div>
   <label class="field"><span>País <small>(opcional)</small></span><input class="input" id="m_c" maxlength="40" list="countries" autocomplete="off"></label>
+  <label class="field"><span>Bias (opcional)</span><input class="input" id="m_bias" maxlength="60"></label>
   <datalist id="countries"></datalist>
   <label class="switch" id="m_al"><input type="checkbox" id="m_a"><span class="track"></span>Activo en el grupo</label>
   <p class="form-err" role="alert"></p>

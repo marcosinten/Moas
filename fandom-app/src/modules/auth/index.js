@@ -23,6 +23,7 @@ exports.register=({app})=>{
     if(req.query.manage!=='1') return res.json(await db.all('SELECT id,username,display_name,role FROM admins WHERE active=1 ORDER BY lower(display_name)'));
     if(req.admin.role!=='superadmin') return res.status(403).json({error:'Sin permiso'});
     res.json(await db.all(`SELECT id,username,display_name,role,active,must_change_password,created_at,
+      profile_birth_date,profile_country,profile_bias,profile_palette,profile_photo IS NOT NULL AS has_photo,
       ((((SELECT COUNT(*) FROM events WHERE created_by=a.id OR supervisor_id=a.id)+(SELECT COUNT(*) FROM event_collaborators WHERE admin_id=a.id))>0))::int AS has_history
       FROM admins a ORDER BY active DESC, lower(display_name)`));
   }));

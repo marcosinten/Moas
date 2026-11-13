@@ -179,7 +179,8 @@ function enter(a, msg) {
   $('#login').hidden = !!a; $('#app').hidden = !a;
   if (!a) { $('#view').replaceChildren(); $('#lerr').textContent = msg || ''; $('#lu').focus(); return; }
   $('#me').replaceChildren(avatar(a.display_name, true), h('span', {}, a.display_name));
-  $('#me').title = a.role === 'superadmin' ? 'Superadmin' : 'Administradora';
+  $('#me').title = 'Mi perfil';
+  loadOwnProfile(a);
   $('#tabs').replaceChildren(...TABS.filter(t => !t.su || a.role === 'superadmin').map(t =>
     h('button', { class: 'tab', 'data-tab': t.id, onclick: () => t.id === 'home' ? go('home') : t.id === 'members' ? go('members') : t.id === 'admins' ? go('admins') : go('events', { kind: t.id, hist: false }) }, icon(t.ic), h('span', {}, t.label))));
   S.intro = true; go('home'); loadNotes(); S.poll = setInterval(loadNotes, 30000);
@@ -289,6 +290,7 @@ function memberCard(m) {
   const c = h('article', { class: 'card member' + (m.active ? '' : ' off'), tabindex: 0 }, avatar(m.nickname),
     h('div', { class: 'who' }, h('h3', { title: m.nickname }, m.nickname),
       (m.country || m.birth_date) ? h('div', { class: 'meta' }, m.country ? h('span', {}, icon('globe'), m.country) : null, m.birth_date ? h('span', {}, icon('cake'), `${fd(m.birth_date)}${a != null ? ` (${a} años)` : ''}`) : null) : null,
+      m.bias ? h('div', { class: 'meta' }, 'Bias: ' + m.bias) : null,
       m.creator_name ? h('div', { class: 'meta' }, h('span', {}, icon('user'), `Agregado por: ${m.creator_name}`)) : null,
       h('div', { class: 'badges' }, !m.active ? h('span', { class: 'badge b-bad' }, icon('ban'), 'De baja') : null, bday ? h('span', { class: 'badge b-rose' }, icon('cake'), 'Cumple este mes') : null)),
     h('div', { class: 'card-actions' },
@@ -314,10 +316,11 @@ function openMember(m) {
   const d = $('#mdlg'), f = $('#mform'); f._id = m ? m.id : null;
   $('#mdt').textContent = m ? 'Editar integrante' : 'Nuevo integrante';
   $('#m_n').value = m?.nickname || ''; $('#m_b').value = m?.birth_date || ''; $('#m_c').value = m?.country || ''; $('#m_j').value = m?.joined_at || TODAY();
+  $('#m_bias').value = m?.bias || '';
   $('#m_a').checked = m ? !!m.active : true; $('#m_al').hidden = !m; errOf(f).textContent = ''; d.showModal(); $('#m_n').focus();
 }
 $('#mform').addEventListener('submit', e => { e.preventDefault(); const f = e.currentTarget; submitting(f, async () => {
-  const b = { nickname: $('#m_n').value, birth_date: $('#m_b').value, country: $('#m_c').value, joined_at: $('#m_j').value, active: $('#m_a').checked };
+  const b = { nickname: $('#m_n').value, birth_date: $('#m_b').value, country: $('#m_c').value, bias: $('#m_bias').value, joined_at: $('#m_j').value, active: $('#m_a').checked };
   await (f._id ? api('PATCH', '/api/members/' + f._id, b) : api('POST', '/api/members', b));
   $('#mdlg').close(); toast(f._id ? 'Cambios guardados' : 'Integrante creado'); M.reload();
 }); });
@@ -498,12 +501,13 @@ async function renderAdmins(el) {
 }
 function adminCard(a) {
   const me = a.id === S.me.id, su = a.role === 'superadmin';
-  const c = h('article', { class: 'card admin' + (a.active ? '' : ' off'), tabindex: 0 },
-    h('div', { class: 'row' }, avatar(a.display_name), h('div', { class: 'who' }, h('h3', { title: a.display_name }, a.display_name), h('div', { class: 'meta' }, h('span', {}, icon('at-sign'), a.username))),
+  const c = h('article', { class: 'card admin' + (a.active ? '' : ' off'), 'data-palette': a.profile_palette || 'default', tabindex: 0 },
+    h('div', { class: 'row' }, profileAvatar(a), h('div', { class: 'who' }, h('h3', { title: a.display_name }, a.display_name), h('div', { class: 'meta' }, h('span', {}, icon('at-sign'), a.username))),
       h('div', { class: 'card-actions' },
         h('button', { class: 'icon-btn', 'aria-label': `Editar a ${a.display_name}`, title: 'Editar', onclick: e => { e.stopPropagation(); openAdmin(a); } }, icon('pencil')),
         h('button', { class: 'icon-btn', 'aria-label': `Restablecer clave de ${a.display_name}`, title: me ? 'Tu clave se cambia al entrar' : 'Restablecer clave', disabled: me, onclick: e => { e.stopPropagation(); resetPass(a); } }, icon('key-round')),
         h('button', { class: 'icon-btn danger', 'aria-label': `Eliminar a ${a.display_name}`, title: me ? 'No puedes eliminarte' : 'Eliminar', disabled: me, onclick: e => { e.stopPropagation(); delAdmins([String(a.id)], a.display_name); } }, icon('trash-2')))),
+    profileDetails(a),
     h('div', { class: 'foot' }, h('div', { class: 'badges' },
       su ? h('span', { class: 'badge b-rose' }, icon('crown'), 'Superadmin') : h('span', { class: 'badge' }, icon('shield'), 'Administradora'),
       a.active ? null : h('span', { class: 'badge b-bad' }, icon('ban'), 'De baja'),
@@ -521,7 +525,7 @@ function openAdmin(a) {
 }
 $('#aform').addEventListener('submit', e => { e.preventDefault(); submitting(e.currentTarget, async () => {
   const b = { display_name: $('#a_n').value, username: $('#a_u').value, role: $('#a_r').value };
-  if (adEdit) { if (adEdit.id !== S.me.id) b.active = $('#a_a').checked; await api('PATCH', '/api/admins/' + adEdit.id, b); $('#adlg').close(); toast('Cambios guardados'); if (adEdit.id === S.me.id) { S.me.display_name = b.display_name.trim(); $('#me').replaceChildren(avatar(S.me.display_name, true), h('span', {}, S.me.display_name)); } }
+  if (adEdit) { if (adEdit.id !== S.me.id) b.active = $('#a_a').checked; await api('PATCH', '/api/admins/' + adEdit.id, b); $('#adlg').close(); toast('Cambios guardados'); if (adEdit.id === S.me.id) { S.me.display_name = b.display_name.trim(); $('#me').replaceChildren(profileAvatar(S.me, true), h('span', {}, S.me.display_name)); } }
   else { const r = await api('POST', '/api/admins', b); $('#adlg').close(); toast('Administradora creada'); A.reveal(r.username, r.temp_password); }
   A.reload();
 }); });
@@ -544,3 +548,102 @@ async function delAdmins(ids, name) {
 
 /* ═════════ Arranque ═════════ */
 api('GET', '/api/auth/me').then(a => enter(a)).catch(() => enter(null));
+
+function profileAvatar(profile, small) {
+  const el = avatar(profile.display_name, small);
+  if (profile.has_photo) {
+    const img = h('img', { src: '/api/profile/photo/' + profile.id + '?v=' + Date.now(), alt: '' });
+    img.onerror = () => img.remove();
+    el.append(img);
+  }
+  return el;
+}
+
+function profileDetails(profile) {
+  const years = age(profile.profile_birth_date);
+  return h('div', { class: 'meta' },
+    years === null ? null : h('span', {}, years + ' años'),
+    profile.profile_country ? h('span', {}, profile.profile_country) : null,
+    profile.profile_bias ? h('span', {}, 'Bias: ' + profile.profile_bias) : null);
+}
+
+function applyProfile(profile) {
+  Object.assign(S.me, profile);
+  $('#me').replaceChildren(profileAvatar(S.me, true), h('span', {}, S.me.display_name));
+  $('#app').dataset.palette = profile.profile_palette || 'default';
+}
+
+async function loadOwnProfile(account) {
+  $('#app').dataset.palette = 'default';
+  try {
+    const profile = await api('GET', '/api/profile');
+    if (S.me === account) applyProfile(profile);
+  } catch (error) {
+    if (S.me === account) toast(error.message, 'err');
+  }
+}
+
+async function compressProfilePhoto(file) {
+  if (file.size > 10 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('Elige una imagen JPEG, PNG o WebP de hasta 10 MB.');
+  }
+  const bitmap = await createImageBitmap(file).catch(() => { throw new Error('No se pudo abrir la foto.'); });
+  try {
+    const canvas = document.createElement('canvas');
+    const scale = Math.min(1, 320 / Math.max(bitmap.width, bitmap.height));
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.85, 0.65, 0.45, 0.25]) {
+      const data = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+      if (data && data.length <= 87380) return data;
+    }
+    throw new Error('No se pudo comprimir la foto. Elige otra.');
+  } finally {
+    bitmap.close();
+  }
+}
+
+$('#me').onclick = async () => {
+  const account = S.me;
+  try {
+    const p = await api('GET', '/api/profile');
+    if (S.me !== account || $('#profile-dialog').open) return;
+    const f = $('#profile-form');
+    f.reset();
+    errOf(f).textContent = '';
+    for (const [id, key] of Object.entries({ name: 'display_name', birth: 'profile_birth_date', country: 'profile_country', bias: 'profile_bias', palette: 'profile_palette' })) {
+      $('#profile-' + id).value = p[key] || '';
+    }
+    $('#profile-birth').max = TODAY();
+    $('#profile-age').textContent = p.profile_birth_date ? age(p.profile_birth_date) + ' años' : '';
+    $('#profile-remove').disabled = !p.has_photo;
+    $('#profile-preview').replaceChildren(profileAvatar(p));
+    $('#profile-dialog').showModal();
+  } catch (error) { if (S.me === account) toast(error.message, 'err'); }
+};
+$('#profile-birth').oninput = e => {
+  $('#profile-age').textContent = e.target.value ? age(e.target.value) + ' años' : '';
+};
+$('#profile-form').onsubmit = e => {
+  e.preventDefault();
+  submitting(e.currentTarget, async () => {
+    const account = S.me;
+    const body = {
+      display_name: $('#profile-name').value, birth_date: $('#profile-birth').value,
+      country: $('#profile-country').value, bias: $('#profile-bias').value, palette: $('#profile-palette').value,
+    };
+    const file = $('#profile-photo').files[0];
+    if (file) body.photo = await compressProfilePhoto(file);
+    else if ($('#profile-remove').checked) body.photo = null;
+    const profile = await api('PATCH', '/api/profile', body);
+    if (S.me !== account) return;
+    applyProfile(profile);
+    $('#profile-dialog').close();
+    if (S.view === 'admins') await go('admins');
+    toast('Perfil actualizado');
+  });
+};

@@ -1,13 +1,19 @@
+const normalizeCountry=require('../../core/country');
 const db=require('../../core/db'),v=require('../../core/validate'),{requireAuth}=require('../auth/service'),{ah}=require('../../core/http');
 const today=()=>new Date().toISOString().slice(0,10);
 function parse(b){
   const e=[],nickname=v.clean(b.nickname,40); if(!nickname) e.push('El apodo/nombre es obligatorio (max. 40 caracteres)');
   let birth=null; if(b.birth_date){birth=v.isoDate(b.birth_date); if(!birth||birth>today()||birth<'1940-01-01'){e.push('Fecha de nacimiento invalida');birth=null;}}
-  let country=null; if(b.country){country=v.clean(b.country,40); if(!country) e.push('Pais invalido');}
+  let country=null; if(b.country){country=normalizeCountry(b.country); if(!country) e.push('Pais invalido');}
   let joined=today(); if(b.joined_at){joined=v.isoDate(b.joined_at); if(!joined) e.push('Fecha de ingreso invalida');}
   const bias=b.bias ? v.clean(b.bias,60) : null;
   if(b.bias && !bias) e.push('Bias inválido (máx. 60 caracteres)');
-  return {e,nickname,birth,country,joined,bias};
+  let phone=null;
+  if(b.phone != null && b.phone !== ''){
+    phone=typeof b.phone==='string' ? b.phone.trim().replace(/[ ().-]/g,'') : '';
+    if(!/^\+?[0-9]{7,15}$/.test(phone)) e.push('El celular debe tener entre 7 y 15 dígitos y puede empezar con +');
+  }
+  return {e,nickname,birth,country,joined,bias,phone};
 }
 const key=s=>s.toLocaleLowerCase('es');
 const dup=async(n,id)=>(await db.all('SELECT nickname FROM members WHERE id<>$1',[id||0])).some(r=>key(r.nickname)===key(n)); // compara con tildes/ñ
@@ -17,7 +23,7 @@ exports.register=({app})=>{
     if(q){a.push('%'+q.replace(/[%_]/g,'')+'%');w.push(`m.nickname ILIKE $${a.length}`);}
     if(c){a.push(c);w.push(`m.country=$${a.length}`);}
     if(req.query.inactive!=='1') w.push('m.active=1');
-    res.json(await db.all(`SELECT m.id,m.nickname,m.birth_date,m.country,m.joined_at,m.active,m.bias,m.created_by,a.display_name creator_name
+    res.json(await db.all(`SELECT m.id,m.nickname,m.birth_date,m.country,m.joined_at,m.active,m.phone,m.bias,m.created_by,a.display_name creator_name
       FROM members m LEFT JOIN admins a ON a.id=m.created_by
       ${w.length?'WHERE '+w.join(' AND '):''} ORDER BY lower(m.nickname)`,a));
   }));
@@ -25,14 +31,14 @@ exports.register=({app})=>{
   app.post('/api/members',requireAuth,ah(async(req,res)=>{
     const p=parse(req.body); if(p.e.length) return res.status(400).json({error:p.e.join('. ')});
     if(await dup(p.nickname)) return res.status(409).json({error:'Ya existe un integrante con ese apodo'});
-    const r=await db.one('INSERT INTO members(nickname,birth_date,country,joined_at,created_by,bias) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[p.nickname,p.birth,p.country,p.joined,req.admin.id,p.bias]);
+    const r=await db.one('INSERT INTO members(nickname,birth_date,country,joined_at,created_by,bias,phone) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',[p.nickname,p.birth,p.country,p.joined,req.admin.id,p.bias,p.phone]);
     res.status(201).json({id:r.id});
   }));
   app.patch('/api/members/:id',requireAuth,ah(async(req,res)=>{
     const id=v.id(req.params.id); if(!id||!(await db.one('SELECT 1 FROM members WHERE id=$1',[id]))) return res.status(404).json({error:'No existe'});
     const p=parse(req.body); if(p.e.length) return res.status(400).json({error:p.e.join('. ')});
     if(await dup(p.nickname,id)) return res.status(409).json({error:'Ya existe un integrante con ese apodo'});
-    await db.run('UPDATE members SET nickname=$1,birth_date=$2,country=$3,joined_at=$4,active=$5,bias=CASE WHEN $7 THEN $8::varchar ELSE bias END WHERE id=$6',[p.nickname,p.birth,p.country,p.joined,req.body.active===false?0:1,id,req.body.bias!==undefined,p.bias]);
+    await db.run('UPDATE members SET nickname=$1,birth_date=$2,country=$3,joined_at=$4,active=$5,bias=CASE WHEN $7 THEN $8::varchar ELSE bias END,phone=CASE WHEN $9 THEN $10::varchar ELSE phone END WHERE id=$6',[p.nickname,p.birth,p.country,p.joined,req.body.active===false?0:1,id,req.body.bias!==undefined,p.bias,req.body.phone!==undefined,p.phone]);
     res.json({ok:true});
   }));
   // Si ya tiene historial de participaciones se da de baja (no se borra) para no dañar las estadisticas.

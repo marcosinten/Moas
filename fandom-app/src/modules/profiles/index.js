@@ -1,3 +1,4 @@
+const normalizeCountry = require('../../core/country');
 const db = require('../../core/db');
 const v = require('../../core/validate');
 const { requireAuth } = require('../auth/service');
@@ -22,7 +23,7 @@ exports.register = ({ app }) => {
     const { display_name, birth_date, country, bias, palette, photo } = req.body;
     const name = v.clean(display_name, 60);
     const date = birth_date ? v.isoDate(birth_date) : null;
-    const place = country ? v.clean(country, 40) : null;
+    const place = country ? normalizeCountry(country) : null;
     const favorite = bias ? v.clean(bias, 60) : null;
     if (!name || (birth_date && (!date || date < '1900-01-01' || date > new Date().toISOString().slice(0, 10)))
       || (country && !place) || (bias && !favorite) || !palettes.includes(palette)) {

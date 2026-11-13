@@ -264,7 +264,6 @@ async function renderMembers(el) {
     const [list, cs] = await Promise.all([api('GET', `/api/members?q=${encodeURIComponent(M.q)}&country=${encodeURIComponent(M.country)}&inactive=${M.inactive ? 1 : 0}`), api('GET', '/api/members/countries')]);
     M.list = list;
     fc.replaceChildren(new Option('Todos los países', ''), ...cs.map(x => new Option(x, x))); fc.value = M.country;
-    $('#countries').replaceChildren(...cs.map(x => new Option(x)));
     count.textContent = list.length;
     const cards = list.map(memberCard);
     flip(grid, () => grid.replaceChildren(...(cards.length ? cards : [])));
@@ -291,6 +290,17 @@ function memberCard(m) {
     h('div', { class: 'who' }, h('h3', { title: m.nickname }, m.nickname),
       (m.country || m.birth_date) ? h('div', { class: 'meta' }, m.country ? h('span', {}, icon('globe'), m.country) : null, m.birth_date ? h('span', {}, icon('cake'), `${fd(m.birth_date)}${a != null ? ` (${a} años)` : ''}`) : null) : null,
       m.bias ? h('div', { class: 'meta' }, 'Bias: ' + m.bias) : null,
+      m.phone ? h('div', { class: 'meta' }, h('span', {}, 'Celular: ' + m.phone),
+        h('button', { type: 'button', class: 'btn', 'aria-label': 'Copiar celular de ' + m.nickname,
+          onclick: async e => {
+            e.stopPropagation();
+            try {
+              await navigator.clipboard.writeText(m.phone);
+              toast('Número copiado');
+            } catch {
+              toast('No se pudo copiar. Puedes seleccionar el número de la tarjeta.', 'err');
+            }
+          } }, 'Copiar')) : null,
       m.creator_name ? h('div', { class: 'meta' }, h('span', {}, icon('user'), `Agregado por: ${m.creator_name}`)) : null,
       h('div', { class: 'badges' }, !m.active ? h('span', { class: 'badge b-bad' }, icon('ban'), 'De baja') : null, bday ? h('span', { class: 'badge b-rose' }, icon('cake'), 'Cumple este mes') : null)),
     h('div', { class: 'card-actions' },
@@ -315,12 +325,12 @@ async function delMembers(ids, name) {
 function openMember(m) {
   const d = $('#mdlg'), f = $('#mform'); f._id = m ? m.id : null;
   $('#mdt').textContent = m ? 'Editar integrante' : 'Nuevo integrante';
-  $('#m_n').value = m?.nickname || ''; $('#m_b').value = m?.birth_date || ''; $('#m_c').value = m?.country || ''; $('#m_j').value = m?.joined_at || TODAY();
+  $('#m_n').value = m?.nickname || ''; $('#m_b').value = m?.birth_date || ''; memberCountry.set(m?.country); $('#m_phone').value = m?.phone || ''; $('#m_j').value = m?.joined_at || TODAY();
   $('#m_bias').value = m?.bias || '';
   $('#m_a').checked = m ? !!m.active : true; $('#m_al').hidden = !m; errOf(f).textContent = ''; d.showModal(); $('#m_n').focus();
 }
 $('#mform').addEventListener('submit', e => { e.preventDefault(); const f = e.currentTarget; submitting(f, async () => {
-  const b = { nickname: $('#m_n').value, birth_date: $('#m_b').value, country: $('#m_c').value, bias: $('#m_bias').value, joined_at: $('#m_j').value, active: $('#m_a').checked };
+  const b = { nickname: $('#m_n').value, birth_date: $('#m_b').value, country: memberCountry.value(), phone: $('#m_phone').value, bias: $('#m_bias').value, joined_at: $('#m_j').value, active: $('#m_a').checked };
   await (f._id ? api('PATCH', '/api/members/' + f._id, b) : api('POST', '/api/members', b));
   $('#mdlg').close(); toast(f._id ? 'Cambios guardados' : 'Integrante creado'); M.reload();
 }); });
@@ -615,9 +625,10 @@ $('#me').onclick = async () => {
     const f = $('#profile-form');
     f.reset();
     errOf(f).textContent = '';
-    for (const [id, key] of Object.entries({ name: 'display_name', birth: 'profile_birth_date', country: 'profile_country', bias: 'profile_bias', palette: 'profile_palette' })) {
+    for (const [id, key] of Object.entries({ name: 'display_name', birth: 'profile_birth_date', bias: 'profile_bias', palette: 'profile_palette' })) {
       $('#profile-' + id).value = p[key] || '';
     }
+    profileCountry.set(p.profile_country);
     $('#profile-birth').max = TODAY();
     $('#profile-age').textContent = p.profile_birth_date ? age(p.profile_birth_date) + ' años' : '';
     $('#profile-remove').disabled = !p.has_photo;
@@ -634,7 +645,7 @@ $('#profile-form').onsubmit = e => {
     const account = S.me;
     const body = {
       display_name: $('#profile-name').value, birth_date: $('#profile-birth').value,
-      country: $('#profile-country').value, bias: $('#profile-bias').value, palette: $('#profile-palette').value,
+      country: profileCountry.value(), bias: $('#profile-bias').value, palette: $('#profile-palette').value,
     };
     const file = $('#profile-photo').files[0];
     if (file) body.photo = await compressProfilePhoto(file);
@@ -647,3 +658,35 @@ $('#profile-form').onsubmit = e => {
     toast('Perfil actualizado');
   });
 };
+
+
+function countryPicker(id) {
+  const select = $('#' + id);
+  const other = h('input', { class: 'input', maxlength: 40, placeholder: 'Escribe el país', 'aria-label': 'Otro país' });
+  select.append(h('option', { value: '' }, 'Selecciona un país'),
+    ...FANDOM_COUNTRIES.map(name => h('option', { value: name }, name)),
+    h('option', { value: 'other' }, 'Otros'));
+  select.after(other);
+  function sync() {
+    other.hidden = select.value !== 'other';
+    other.required = !other.hidden;
+  }
+  select.addEventListener('change', sync);
+  sync();
+  return {
+    set(name) {
+      const known = FANDOM_COUNTRIES.find(country => name && country.localeCompare(name, 'es', { sensitivity: 'base' }) === 0);
+      select.value = known || (name ? 'other' : '');
+      other.value = name && !known ? name : '';
+      sync();
+    },
+    value() {
+      if (select.value !== 'other') return select.value;
+      const name = other.value.trim();
+      if (!name) throw new Error('Escribe el nombre del país.');
+      return name;
+    },
+  };
+}
+const memberCountry = countryPicker('m_c');
+const profileCountry = countryPicker('profile-country');

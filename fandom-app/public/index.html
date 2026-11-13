@@ -61,7 +61,7 @@
     <label class="field"><span>Nombre visible</span><input class="input" id="profile-name" maxlength="60" required></label>
     <div class="row2">
       <label class="field"><span>Fecha de nacimiento</span><input class="input" id="profile-birth" type="date" min="1900-01-01"><small id="profile-age" aria-live="polite"></small></label>
-      <label class="field"><span>País</span><input class="input" id="profile-country" maxlength="40"></label>
+      <label class="field"><span>País</span><select class="input" id="profile-country"></select></label>
     </div>
     <label class="field"><span>Bias</span><input class="input" id="profile-bias" maxlength="60"></label>
     <label class="field"><span>Foto de perfil</span><input class="input" id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
@@ -82,9 +82,9 @@
     <label class="field"><span>Nacimiento <small>(opcional)</small></span><input class="input" id="m_b" type="date"></label>
     <label class="field"><span>Ingreso al grupo</span><input class="input" id="m_j" type="date"></label>
   </div>
-  <label class="field"><span>País <small>(opcional)</small></span><input class="input" id="m_c" maxlength="40" list="countries" autocomplete="off"></label>
+  <label class="field"><span>País <small>(opcional)</small></span><select class="input" id="m_c"></select></label>
   <label class="field"><span>Bias (opcional)</span><input class="input" id="m_bias" maxlength="60"></label>
-  <datalist id="countries"></datalist>
+  <label class="field"><span>Celular (opcional)</span><input class="input" id="m_phone" type="tel" maxlength="32" placeholder="+593 999 123 456"></label>
   <label class="switch" id="m_al"><input type="checkbox" id="m_a"><span class="track"></span>Activo en el grupo</label>
   <p class="form-err" role="alert"></p>
   <footer class="dlg-f"><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn primary">Guardar</button></footer>
@@ -133,6 +133,7 @@
   <footer class="dlg-f"><button class="btn" value="cancel">Cancelar</button><button class="btn" id="c_ok" value="ok"></button></footer>
 </form></dialog>
 
+<script src="/countries.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

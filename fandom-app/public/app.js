@@ -290,15 +290,15 @@ function memberCard(m) {
     h('div', { class: 'who' }, h('h3', { title: m.nickname }, m.nickname),
       (m.country || m.birth_date) ? h('div', { class: 'meta' }, m.country ? h('span', {}, icon('globe'), m.country) : null, m.birth_date ? h('span', {}, icon('cake'), `${fd(m.birth_date)}${a != null ? ` (${a} años)` : ''}`) : null) : null,
       m.bias ? h('div', { class: 'meta' }, 'Bias: ' + m.bias) : null,
-      m.phone ? h('div', { class: 'meta' }, h('span', {}, 'Celular: ' + m.phone),
-        h('button', { type: 'button', class: 'btn', 'aria-label': 'Copiar celular de ' + m.nickname,
+      m.phone ? h('div', { class: 'meta' }, h('span', {}, 'Celular / usuario: ' + m.phone),
+        h('button', { type: 'button', class: 'btn', 'aria-label': 'Copiar contacto de ' + m.nickname,
           onclick: async e => {
             e.stopPropagation();
             try {
               await navigator.clipboard.writeText(m.phone);
-              toast('Número copiado');
+              toast('Contacto copiado');
             } catch {
-              toast('No se pudo copiar. Puedes seleccionar el número de la tarjeta.', 'err');
+              toast('No se pudo copiar. Puedes seleccionar el contacto de la tarjeta.', 'err');
             }
           } }, 'Copiar')) : null,
       m.creator_name ? h('div', { class: 'meta' }, h('span', {}, icon('user'), `Agregado por: ${m.creator_name}`)) : null,

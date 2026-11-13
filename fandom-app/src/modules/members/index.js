@@ -10,8 +10,8 @@ function parse(b){
   if(b.bias && !bias) e.push('Bias inválido (máx. 60 caracteres)');
   let phone=null;
   if(b.phone != null && b.phone !== ''){
-    phone=typeof b.phone==='string' ? b.phone.trim().replace(/[ ().-]/g,'') : '';
-    if(!/^\+?[0-9]{7,15}$/.test(phone)) e.push('El celular debe tener entre 7 y 15 dígitos y puede empezar con +');
+    phone=v.clean(b.phone,80);
+    if(!phone) e.push('Celular / usuario inválido (máx. 80 caracteres)');
   }
   return {e,nickname,birth,country,joined,bias,phone};
 }

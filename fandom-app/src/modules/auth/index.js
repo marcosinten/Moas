@@ -20,7 +20,7 @@ exports.register=({app})=>{
   // Lista de administradoras. Sin parametros: solo activas (selector de colaboradoras).
   // ?manage=1 (solo superadmin): todas, con estado y si tienen historial (para la pantalla de administradoras).
   app.get('/api/admins',s.requireAuth,ah(async(req,res)=>{
-    if(req.query.manage!=='1') return res.json(await db.all('SELECT id,username,display_name,role FROM admins WHERE active=1 ORDER BY lower(display_name)'));
+    if(req.query.manage!=='1') return res.json(await db.all('SELECT id,username,display_name,role,profile_birth_date,profile_country,profile_bias,profile_palette,profile_photo IS NOT NULL AS has_photo FROM admins WHERE active=1 ORDER BY lower(display_name)'));
     if(req.admin.role!=='superadmin') return res.status(403).json({error:'Sin permiso'});
     res.json(await db.all(`SELECT id,username,display_name,role,active,must_change_password,created_at,
       profile_birth_date,profile_country,profile_bias,profile_palette,profile_photo IS NOT NULL AS has_photo,

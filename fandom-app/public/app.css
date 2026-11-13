@@ -342,3 +342,9 @@ button.me{color:inherit;cursor:pointer}
 }
 .card.admin[data-palette="default"]{--profile-tint:inherit}
 .card.admin>.meta{margin-top:8px}
+
+#event-details, #event-team, #event-message{display:grid;gap:12px}
+#event-details[hidden], #event-team[hidden], #event-message[hidden], #event-back[hidden]{display:none}
+.event-collaborator{cursor:pointer}
+.event-collaborator:has(input:checked){outline:2px solid currentColor;outline-offset:-2px}
+#event-preview,#event-copy-text{width:100%}

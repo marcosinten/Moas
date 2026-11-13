@@ -93,16 +93,28 @@
 <!-- Dinámica / votación -->
 <dialog id="edlg" aria-labelledby="edt"><form class="dlg" id="eform" novalidate>
   <header class="dlg-h"><span class="tile-ic" id="e_ic"></span><h2 id="edt"></h2></header>
-  <label class="field"><span>Nombre</span><input class="input" id="e_n" maxlength="80" autocomplete="off" required></label>
-  <div class="row2">
-    <label class="field"><span>Fecha</span><input class="input" id="e_d" type="date" required></label>
-    <label class="field"><span>Hora de apertura <small>(opcional)</small></span><input class="input" id="e_t" type="time"></label>
-  </div>
-  <label class="field"><span>Descripción <small>(opcional)</small></span><textarea class="input" id="e_s" rows="3" maxlength="1000"></textarea></label>
-  <label class="field"><span>Supervisora</span><select class="input" id="e_p"></select></label>
-  <div class="field"><span>Colaboradoras <small>(reciben una invitación)</small></span><div class="checks" id="e_c"></div></div>
+  <p id="event-step" aria-live="polite"></p>
+  <section id="event-details">
+    <label class="field"><span>Nombre</span><input class="input" id="e_n" maxlength="80" required></label>
+    <label class="field"><span>Fecha de apertura</span><input class="input" id="e_d" type="date" required></label>
+    <div class="row2">
+      <label class="field"><span>Hora (00–23)</span><select class="input" id="event-hour" size="3"></select></label>
+      <label class="field"><span>Minutos (00–59)</span><select class="input" id="event-minute" size="3"></select></label>
+    </div>
+    <label class="field"><span>Zona horaria de apertura</span><select class="input" id="event-zone"></select></label>
+    <p class="txt">Supervisora: <strong id="e_p"></strong></p>
+  </section>
+  <section id="event-team" hidden>
+    <p class="txt">Selecciona quiénes recibirán una invitación. Puedes continuar sin colaboradoras.</p>
+    <div class="grid" id="e_c"></div>
+  </section>
+  <section id="event-message" hidden>
+    <label class="field"><span>¿En qué consiste?</span><textarea class="input" id="e_s" rows="3" maxlength="1000"></textarea></label>
+    <p class="txt">Horarios calculados con una ciudad de referencia por país.</p>
+    <textarea class="input" id="event-preview" rows="10" readonly aria-label="Vista previa del mensaje"></textarea>
+  </section>
   <p class="form-err" role="alert"></p>
-  <footer class="dlg-f"><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn primary">Guardar</button></footer>
+  <footer class="dlg-f"><button type="button" class="btn" data-close>Cancelar</button><button type="button" class="btn" id="event-back">Atrás</button><button type="submit" class="btn primary" id="event-next">Siguiente</button></footer>
 </form></dialog>
 
 <!-- Administradora -->
@@ -133,6 +145,13 @@
   <footer class="dlg-f"><button class="btn" value="cancel">Cancelar</button><button class="btn" id="c_ok" value="ok"></button></footer>
 </form></dialog>
 
+<dialog id="event-copy-dialog" aria-labelledby="event-copy-title">
+  <div class="dlg">
+    <h2 id="event-copy-title">Evento guardado</h2>
+    <textarea class="input" id="event-copy-text" rows="10" readonly aria-label="Mensaje del evento"></textarea>
+    <footer class="dlg-f"><button type="button" class="btn" data-close>Cerrar</button><button type="button" class="btn primary" id="event-copy-button">Copiar mensaje</button></footer>
+  </div>
+</dialog>
 <script src="/countries.js"></script>
 <script src="/app.js"></script>
 </body>

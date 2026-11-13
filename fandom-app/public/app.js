@@ -389,24 +389,133 @@ async function delEvents(ids, name) {
 }
 
 /* ═════════ Formulario de dinámica / votación ═════════ */
-let edEv = null;
-async function openEvForm(e) {
-  edEv = e; const k = KIND[S.kind], f = $('#eform'); let admins;
-  try { admins = await api('GET', '/api/admins'); } catch (x) { return toast(x.message, 'err'); }
-  const creator = e ? e.created_by : S.me.id, sel2 = e ? e.collaborators.map(c => c.id) : [], others = admins.filter(a => a.id !== creator);
-  $('#edt').textContent = e ? k.editar : k.nuevo; $('#e_ic').replaceChildren(icon(k.ic));
-  $('#e_n').value = e?.name || ''; $('#e_d').value = e?.event_date || ''; $('#e_t').value = e?.start_time || ''; $('#e_s').value = e?.description || '';
-  $('#e_p').replaceChildren(new Option('Yo (quien la crea)', ''), ...others.map(a => new Option(a.display_name, a.id)));
-  $('#e_p').value = e && e.supervisor_id !== creator ? e.supervisor_id : '';
-  $('#e_c').replaceChildren(...(others.length ? others.map(a => h('label', { class: 'chk' }, h('input', { type: 'checkbox', value: a.id, checked: sel2.includes(a.id) }), avatar(a.display_name, true), a.display_name)) : [h('span', { class: 'txt', style: 'color:var(--ink-3)' }, 'Aún no hay otras administradoras.')]));
-  errOf(f).textContent = ''; $('#edlg').showModal(); $('#e_n').focus();
+let edEv = null, eventStep = 0;
+const eventReferences = [
+  ['🇨🇷','America/Costa_Rica'], ['🇬🇹','America/Guatemala'], ['🇳🇮','America/Managua'],
+  ['🇭🇳','America/Tegucigalpa'], ['🇸🇻','America/El_Salvador'], ['🇲🇽','America/Mexico_City'],
+  ['🇨🇴','America/Bogota'], ['🇵🇦','America/Panama'], ['🇵🇪','America/Lima'], ['🇪🇨','America/Guayaquil'],
+  ['🇻🇪','America/Caracas'], ['🇵🇷','America/Puerto_Rico'], ['🇩🇴','America/Santo_Domingo'],
+  ['🇧🇴','America/La_Paz'], ['🇨🇺','America/Havana'], ['🇨🇱','America/Santiago'], ['🇭🇹','America/Port-au-Prince'],
+  ['🇧🇷','America/Sao_Paulo'], ['🇺🇾','America/Montevideo'], ['🇦🇷','America/Argentina/Buenos_Aires'],
+  ['🇵🇾','America/Asuncion'], ['🇪🇸','Europe/Madrid'],
+];
+const padTime = number => String(number).padStart(2, '0');
+function zoneParts(instant, zone) {
+  const format = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  });
+  const p = Object.fromEntries(format.formatToParts(instant).map(part => [part.type, part.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
-$('#eform').addEventListener('submit', e => { e.preventDefault(); submitting(e.currentTarget, async () => {
-  const b = { kind: S.kind, name: $('#e_n').value, event_date: $('#e_d').value, start_time: $('#e_t').value, description: $('#e_s').value, supervisor_id: $('#e_p').value || null,
-    collaborators: $$('#e_c input:checked').map(i => Number(i.value)) };
-  if (edEv) { await api('PATCH', '/api/events/' + edEv.id, b); $('#edlg').close(); toast('Cambios guardados'); go('evd', { evId: edEv.id }); }
-  else { const r = await api('POST', '/api/events', b); $('#edlg').close(); toast('Creada. Se enviaron las invitaciones'); go('evd', { evId: r.id }); }
-}); });
+function openingInstant(date, time, zone) {
+  const target = date + 'T' + time;
+  const naive = Date.parse(target + 'Z');
+  const candidates = new Set();
+  for (const hours of [-36, 0, 36]) {
+    const probe = naive + hours * 3600000;
+    const offset = Date.parse(zoneParts(probe, zone) + 'Z') - probe;
+    const candidate = naive - offset;
+    if (zoneParts(candidate, zone) === target) candidates.add(candidate);
+  }
+  if (candidates.size !== 1) throw new Error('Esa hora es ambigua o no existe por un cambio de horario. Elige otra.');
+  return [...candidates][0];
+}
+function eventMessage(data) {
+  const instant = openingInstant(data.event_date, data.start_time, data.opening_zone);
+  const groups = new Map();
+  for (const [flag, zone] of eventReferences) {
+    const local = zoneParts(instant, zone);
+    if (!groups.has(local)) groups.set(local, []);
+    groups.get(local).push(flag);
+  }
+  const lines = [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([local, flags]) => {
+    const [date, time] = local.split('T');
+    const [hour, minute] = time.split(':').map(Number);
+    return `${padTime(hour % 12 || 12)}:${padTime(minute)} ${hour < 12 ? 'a. m.' : 'p. m.'} ${flags.join(' ')}${date !== data.event_date ? ' · ' + fd(date) : ''}`;
+  });
+  return [data.name, data.description.trim(), 'Apertura: ' + fd(data.event_date), lines.join('\n')].filter(Boolean).join('\n\n');
+}
+function eventData() {
+  return {
+    kind: S.kind, name: $('#e_n').value.trim(), event_date: $('#e_d').value,
+    start_time: $('#event-hour').value + ':' + $('#event-minute').value,
+    opening_zone: $('#event-zone').value, description: $('#e_s').value,
+    collaborators: $$('#e_c input:checked').map(input => Number(input.value)),
+  };
+}
+function showEventStep(step) {
+  eventStep = step;
+  const labels = ['Datos del evento', 'Colaboradoras', 'Personalizar mensaje'];
+  $('#event-step').textContent = `Paso ${step + 1} de 3 · ${labels[step]}`;
+  ['event-details', 'event-team', 'event-message'].forEach((id, i) => { $('#' + id).hidden = i !== step; });
+  $('#event-back').hidden = step === 0;
+  $('#event-next').textContent = step < 2 ? 'Siguiente' : edEv ? 'Guardar y copiar mensaje' : 'Crear evento y copiar mensaje';
+}
+async function openEvForm(e) {
+  let admins;
+  try { admins = await api('GET', '/api/admins'); } catch (x) { return toast(x.message, 'err'); }
+  if ($('#edlg').open) return;
+  edEv = e;
+  const k = KIND[S.kind], creator = e?.created_by ?? S.me.id;
+  const selected = new Set(e?.collaborators.map(c => c.id) || []);
+  $('#edt').textContent = e ? k.editar : k.nuevo;
+  $('#e_ic').replaceChildren(icon(k.ic));
+  $('#e_n').value = e?.name || '';
+  $('#e_d').value = e?.event_date || TODAY();
+  $('#e_s').value = e?.description || '';
+  $('#e_p').textContent = e?.supervisor_name || e?.creator_name || S.me.display_name;
+  const device = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const zone = e?.opening_zone || device;
+  $('#event-zone').replaceChildren(...[...new Set([zone, device, ...eventReferences.map(([, z]) => z)])]
+    .map(z => new Option(z.replaceAll('_', ' '), z)));
+  $('#event-zone').value = zone;
+  const [hour, minute] = (e?.start_time || '00:00').split(':');
+  for (const [id, count, value] of [['event-hour', 24, hour], ['event-minute', 60, minute]]) {
+    const select = $('#' + id);
+    select.replaceChildren(...Array.from({ length: count }, (_, n) => new Option(padTime(n), padTime(n))));
+    select.value = value;
+  }
+  const cards = admins.filter(a => a.id !== creator && a.id !== e?.supervisor_id).map(a =>
+    h('label', { class: 'card admin event-collaborator', 'data-palette': a.profile_palette },
+      h('div', { class: 'row' }, h('input', { type: 'checkbox', value: a.id, checked: selected.has(a.id) }),
+        profileAvatar(a), h('strong', {}, a.display_name)), profileDetails(a)));
+  $('#e_c').replaceChildren(...(cards.length ? cards : [h('p', {}, 'Aún no hay otras administradoras.')]));
+  errOf($('#eform')).textContent = '';
+  showEventStep(0);
+  $('#edlg').showModal();
+  $('#e_n').focus();
+}
+$('#event-back').onclick = () => { errOf($('#eform')).textContent = ''; showEventStep(eventStep - 1); };
+$('#e_s').oninput = () => { $('#event-preview').value = eventMessage(eventData()); };
+$('#eform').addEventListener('submit', e => {
+  e.preventDefault();
+  submitting(e.currentTarget, async () => {
+    const data = eventData();
+    if (!data.name || !data.event_date) throw new Error('Completa el nombre y la fecha de apertura.');
+    const message = eventMessage(data);
+    if (eventStep < 2) {
+      showEventStep(eventStep + 1);
+      if (eventStep === 2) { $('#event-preview').value = message; $('#e_s').focus(); }
+      else $('#e_c input')?.focus();
+      return;
+    }
+    const result = await api(edEv ? 'PATCH' : 'POST', edEv ? '/api/events/' + edEv.id : '/api/events', data);
+    $('#edlg').close();
+    const detailId = edEv?.id || result.id;
+    go('evd', { evId: detailId });
+    try { await navigator.clipboard.writeText(message); toast('Evento guardado. Mensaje copiado.'); }
+    catch {
+      $('#event-copy-text').value = message;
+      $('#event-copy-dialog').showModal();
+    }
+  });
+});
+$('#event-copy-button').onclick = async () => {
+  const area = $('#event-copy-text');
+  try { await navigator.clipboard.writeText(area.value); $('#event-copy-dialog').close(); toast('Mensaje copiado'); }
+  catch { area.focus(); area.select(); toast('Usa la opción Copiar de tu dispositivo.', 'info'); }
+};
 
 /* ═════════ Detalle: participación y votos ═════════ */
 let marks = new Map(), saved = '', EV = null, pq = '';

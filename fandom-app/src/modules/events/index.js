@@ -28,10 +28,16 @@ async function parse(b,creatorId){
   let desc=null; if(b.description){desc=v.clean(b.description,1000); if(!desc) e.push('Descripción inválida (máx. 1000 caracteres)');}
   const valid=new Set((await db.all('SELECT id FROM admins WHERE active=1')).map(r=>r.id));
   const ids=new Set((Array.isArray(b.collaborators)?b.collaborators:[]).map(Number));
-  const sup=b.supervisor_id?Number(b.supervisor_id):null; if(sup) ids.add(sup);
   ids.delete(creatorId);
-  if([...ids].some(i=>!valid.has(i))||(sup&&!valid.has(sup))) e.push('Administradora no válida en colaboradoras/supervisora');
-  return {e,name,date,time,desc,sup,ids:[...ids]};
+  if([...ids].some(i=>!valid.has(i))) e.push('Administradora no válida en colaboradoras');
+  const zone=b.opening_zone || null;
+  if(zone !== null){
+    try {
+      if(typeof zone!=='string'||zone.length>80) throw new Error();
+      new Intl.DateTimeFormat('es',{timeZone:zone});
+    } catch { e.push('Zona horaria inválida'); }
+  }
+  return {e,name,date,time,desc,zone,ids:[...ids]};
 }
 const invite=(x,admin,id,kind,name,date,to)=>notify(to,'invite',id,`${admin.display_name} te invita a colaborar en la ${KN[kind]} «${name}» (${fd(date)})`,x);
 const load=async(req,res)=>{ const id=v.id(req.params.id), e=id&&await getEvent(db,id); if(!e){res.status(404).json({error:'No existe'});return null;} return (await decorate([e],req.admin))[0]; };
@@ -50,7 +56,7 @@ exports.register=({app})=>{
     const kind=req.body.kind; if(!(kind in KN)) return res.status(400).json({error:'Tipo inválido'});
     const p=await parse(req.body,req.admin.id); if(p.e.length) return res.status(400).json({error:p.e.join('. ')});
     const id=await db.tx(async t=>{
-      const r=await t.one('INSERT INTO events(kind,name,description,event_date,start_time,created_by,supervisor_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',[kind,p.name,p.desc,p.date,p.time,req.admin.id,p.sup||req.admin.id]);
+      const r=await t.one('INSERT INTO events(kind,name,description,event_date,start_time,created_by,supervisor_id,opening_zone) VALUES($1,$2,$3,$4,$5,$6,$6,$7) RETURNING id',[kind,p.name,p.desc,p.date,p.time,req.admin.id,p.zone]);
       for(const a of p.ids){ await t.run('INSERT INTO event_collaborators(event_id,admin_id) VALUES($1,$2)',[r.id,a]); await invite(t,req.admin,r.id,kind,p.name,p.date,a); }
       return r.id; });
     res.status(201).json({id});
@@ -61,7 +67,7 @@ exports.register=({app})=>{
     if(!e.can_manage) return res.status(403).json({error:'Sin permiso'});
     const p=await parse(req.body,e.created_by); if(p.e.length) return res.status(400).json({error:p.e.join('. ')});
     await db.tx(async t=>{
-      await t.run('UPDATE events SET name=$1,description=$2,event_date=$3,start_time=$4,supervisor_id=$5 WHERE id=$6',[p.name,p.desc,p.date,p.time,p.sup||e.created_by,e.id]);
+      await t.run('UPDATE events SET name=$1,description=$2,event_date=$3,start_time=$4,opening_zone=$5 WHERE id=$6',[p.name,p.desc,p.date,p.time,p.zone,e.id]);
       const old=new Set(e.collaborators.map(c=>c.id)),now=new Set(p.ids);
       for(const a of old) if(!now.has(a)) await t.run('DELETE FROM event_collaborators WHERE event_id=$1 AND admin_id=$2',[e.id,a]);
       for(const a of now) if(!old.has(a)){ await t.run('INSERT INTO event_collaborators(event_id,admin_id) VALUES($1,$2)',[e.id,a]); await invite(t,req.admin,e.id,e.kind,p.name,p.date,a); }

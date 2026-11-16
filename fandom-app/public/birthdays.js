@@ -1,168 +1,295 @@
 'use strict';
 
 const birthdayApi = '/api/birthdays';
-const birthdayLimit = 160;
+const birthdayStatus = {
+  pending: ['Pendiente', 'b-warn'],
+  approved: ['Aprobado', 'b-ok'],
+  rejected: ['Rechazado', 'b-bad'],
+};
 
-function drawBirthday(canvas, category, title, message, template) {
+function birthdayField(label, input, hint) {
+  return h('label', { class: 'field' }, h('span', {}, label), input, hint);
+}
+
+function birthdayTemplateUrl(template) {
+  return birthdayApi + '/templates/' + encodeURIComponent(template.id) + '?v=' + encodeURIComponent(template.updated_at);
+}
+
+function birthdayBadge(status) {
+  const [label, color] = birthdayStatus[status];
+  return h('span', { class: 'badge ' + color }, label);
+}
+
+function birthdayDialog(title, layout) {
+  const heading = h('h2', { id: 'birthday-dialog-title' }, title);
+  const body = h('div', { class: 'dlg birthday-dialog' }, h('header', { class: 'dlg-h' }, heading));
+  const dialog = h('dialog', { 'aria-labelledby': heading.id }, body);
+  const close = h('button', { type: 'button', class: 'btn', onclick: () => dialog.close() }, 'Cerrar');
+  layout(body, close, () => dialog.close());
+  dialog.addEventListener('close', () => dialog.remove(), { once: true });
+  document.body.append(dialog);
+  dialog.showModal();
+  return dialog;
+}
+
+function birthdaySongCard(song, showAuthor, actions = []) {
+  const cover = h('div', { class: 'birthday-song-cover', 'aria-hidden': 'true' }, icon('heart'));
+  if (song.thumbnail_url) {
+    const image = h('img', { src: song.thumbnail_url, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
+    image.onerror = () => image.remove();
+    cover.append(image);
+  }
+  const source = song.provider || new URL(song.url).hostname;
+  return h('article', { class: 'card birthday-entry', tabindex: -1 },
+    h('div', { class: 'birthday-entry-row' }, cover,
+      h('div', { class: 'birthday-entry-copy' },
+        h('a', { href: song.url, target: '_blank', rel: 'noopener noreferrer' }, song.title || 'Abrir canción'),
+        h('p', { class: 'birthday-muted' }, source, showAuthor ? ' · ' + song.display_name : '')),
+      birthdayBadge(song.status)),
+    actions.length ? h('div', { class: 'birthday-actions' }, actions) : null);
+}
+
+function birthdaySongForm(move) {
+  const url = h('input', { class: 'input', type: 'url', maxlength: 2048, required: true,
+    placeholder: 'https://…', spellcheck: 'false' });
+  const form = h('form', { class: 'birthday-form' }, birthdayField('Enlace de la canción', url),
+    h('p', { class: 'form-err', role: 'alert' }),
+    h('button', { class: 'btn primary', type: 'submit' }, icon('plus'), 'Agregar canción'));
+  form.onsubmit = e => {
+    e.preventDefault();
+    submitting(form, async () => {
+      await api('POST', birthdayApi + '/personalization/songs', { url: url.value });
+      toast('Canción enviada a revisión');
+      if (form.isConnected) await move();
+    });
+  };
+  return form;
+}
+
+async function renderPersonalization(el) {
+  const data = await api('GET', birthdayApi + '/personalization');
+  if (!el.isConnected) return;
+  const refetch = () => go('personalization');
+  const message = h('textarea', { class: 'input', rows: 4, maxlength: data.messageLength,
+    'aria-describedby': 'birthday-message-counter', placeholder: 'Escribe una dedicatoria que pueda servir para distintos cumpleaños…' });
+  message.value = data.message?.message || '';
+  const saved = message.value;
+  const status = data.message?.status;
+  const counter = h('small', { id: 'birthday-message-counter', class: 'birthday-muted' });
+  const save = h('button', { type: 'submit', class: 'btn primary' }, icon('save'), 'Guardar mensaje');
+  const form = h('form', { class: 'birthday-form' },
+    birthdayField('Mensaje de cumpleaños (opcional)', message, counter),
+    h('p', { class: 'form-err', role: 'alert' }), save);
+
+  function updateCount() {
+    const cleaned = message.value.trim();
+    const words = cleaned ? cleaned.split(/\s+/u).length : 0;
+    counter.textContent = words + ' / ' + data.messageWords + ' palabras · ' + message.value.length + ' / ' + data.messageLength + ' caracteres';
+    message.setCustomValidity(words > data.messageWords ? 'Usa hasta ' + data.messageWords + ' palabras.' : '');
+    save.disabled = words > data.messageWords || message.value === saved;
+  }
+
+  message.addEventListener('input', updateCount);
+  updateCount();
+  form.onsubmit = e => {
+    e.preventDefault();
+    submitting(form, async () => {
+      await api('PUT', birthdayApi + '/personalization/message', { message: message.value });
+      toast(message.value.trim() ? 'Mensaje guardado' : 'Mensaje retirado');
+      if (form.isConnected) await refetch();
+    }).finally(updateCount);
+  };
+
+  el.append(
+    h('div', { class: 'head' }, h('div', { class: 'titlebox' }, h('span', { class: 'tile-ic' }, icon('sparkles')),
+      h('h1', {}, 'Personalización')),
+    h('button', { class: 'btn', onclick: () => $('#me').click() }, icon('user'), 'Mi perfil')),
+    h('div', { class: 'birthday-personalization' },
+      h('section', { class: 'card birthday-panel' },
+        h('div', { class: 'birthday-panel-heading' }, h('h2', {}, 'Dedicatoria'), status ? birthdayBadge(status) : null),
+        h('p', { class: 'birthday-muted' }, 'Tu mensaje se guarda para que una superadmin lo revise. Puedes dejarlo vacío.'),
+        form),
+      h('section', { class: 'card birthday-panel' }, h('h2', {}, 'Canciones para dedicar'),
+        birthdaySongForm(refetch)),
+      h('section', { class: 'birthday-song-list' }, h('h2', {}, 'Mis canciones'),
+        data.songs.length ? data.songs.map(song => birthdaySongCard(song, false))
+          : h('p', { class: 'birthday-muted' }, 'Todavía no has enviado canciones.'))));
+}
+
+function openBirthdayTemplateForm(templates, activeCategory, refresh) {
+  birthdayDialog('Subir plantilla', (body, close, dismiss) => {
+    close.textContent = 'Cancelar';
+    const category = h('select', { class: 'input', required: true },
+      h('option', { value: '' }, 'Selecciona un bias'),
+      templates.map(item => h('option', { value: item.id }, item.label)));
+    category.value = activeCategory || '';
+    const file = h('input', { class: 'input', type: 'file', accept: 'image/png,.png', required: true });
+    const hint = h('small', { class: 'birthday-muted', 'aria-live': 'polite' });
+    const form = h('form', { class: 'birthday-form' },
+      birthdayField('Categoría de bias', category, hint),
+      birthdayField('Archivo PNG', file, h('small', { class: 'birthday-muted' }, 'Formato horizontal 3:2. Recomendado: 1500 × 1000 px. Hasta 5 MB.')),
+      h('p', { class: 'form-err', role: 'alert' }),
+      h('div', { class: 'dlg-f' }, close, h('button', { class: 'btn primary', type: 'submit' }, 'Guardar plantilla')));
+    const updateHint = () => {
+      const selected = templates.find(item => item.id === category.value);
+      hint.textContent = selected?.updated_at ? 'El nuevo PNG reemplazará la plantilla de ' + selected.label + '.' : '';
+    };
+    category.onchange = updateHint;
+    updateHint();
+    form.onsubmit = e => {
+      e.preventDefault();
+      submitting(form, async () => {
+        if (file.files[0].size > 5 * 1024 * 1024) throw new Error('El PNG supera los 5 MB.');
+        const response = await fetch(birthdayApi + '/templates/' + encodeURIComponent(category.value), {
+          method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: file.files[0],
+        });
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result.error || 'No se pudo guardar la plantilla.');
+        }
+        dismiss();
+        toast('Plantilla guardada');
+        await refresh();
+      });
+    };
+    body.append(form);
+  });
+}
+
+async function renderBirthdayAdministration(el) {
+  if (S.me.role !== 'superadmin') return go('home');
+  const data = await api('GET', birthdayApi + '/manage');
+  if (!el.isConnected) return;
+  const sectionNames = { templates: 'Plantillas', messages: 'Mensajes', songs: 'Canciones' };
+  const section = Object.hasOwn(sectionNames, S.birthdayReviewTab) ? S.birthdayReviewTab : 'templates';
+  const target = S.birthdayReviewItem;
+  const refresh = () => {
+    if (el.isConnected) return go('birthdayAdministration', { birthdayReviewTab: section, birthdayReviewItem: null });
+  };
+  function reviewAction(button, action) {
+    button.disabled = true;
+    return action().then(() => {
+      toast('Cambios guardados');
+      if (el.isConnected) return refresh();
+    }).catch(error => toast(error.message, 'err')).finally(() => { button.disabled = false; });
+  }
+
+  const panel = h('section', { class: 'birthday-content', 'aria-label': sectionNames[section] });
+  el.append(
+    h('div', { class: 'head' },
+      h('div', { class: 'titlebox' }, h('span', { class: 'tile-ic' }, icon('cake')), h('h1', {}, 'Plantillas de cumpleaños')),
+      h('button', { class: 'btn', onclick: () => go('admins') }, icon('chevron-left'), 'Administradoras')),
+    h('nav', { class: 'birthday-sections', 'aria-label': 'Administración de cumpleaños' },
+      Object.entries(sectionNames).map(([key, label]) => {
+        const count = key === 'templates' ? 0 : data[key].filter(item => item.status === 'pending').length;
+        return h('button', { class: 'btn ' + (key === section ? 'primary' : 'ghost'),
+          'aria-current': key === section ? 'page' : null,
+          onclick: () => go('birthdayAdministration', { birthdayReviewTab: key, birthdayReviewItem: null }) },
+        label, count ? h('span', { class: 'birthday-nav-count', 'aria-label': count + ' pendientes' }, count) : null);
+      })), panel);
+
+  if (section === 'templates') {
+    panel.append(
+      h('div', { class: 'birthday-panel-heading' }, h('p', { class: 'birthday-muted' }, 'Una imagen por categoría de bias.'),
+        h('button', { class: 'btn primary', onclick: () => openBirthdayTemplateForm(data.templates, '', refresh) },
+          icon('plus'), 'Subir plantilla')),
+      h('div', { class: 'birthday-template-grid' }, data.templates.map(item => h('article', { class: 'card birthday-template' },
+        h('div', { class: 'birthday-template-media' }, item.updated_at
+          ? h('img', { src: birthdayTemplateUrl(item), alt: 'Plantilla de ' + item.label, loading: 'lazy' })
+          : h('span', {}, icon('cake'), 'Sin plantilla')),
+        h('div', { class: 'birthday-template-info' }, h('h3', {}, item.label),
+          h('button', { class: 'btn', onclick: () => openBirthdayTemplateForm(data.templates, item.id, refresh) },
+            item.updated_at ? 'Reemplazar' : 'Subir'))))));
+    return;
+  }
+
+  function buttons(item, type) {
+    const actions = ['approved', 'rejected'].filter(status => status !== item.status).map(status => {
+      const button = h('button', { class: 'btn ' + (status === 'approved' ? 'primary' : '') },
+        status === 'approved' ? 'Aprobar' : 'Rechazar');
+      button.onclick = () => reviewAction(button, () => api('PATCH', birthdayApi + '/manage/' + type + '/' + item.id,
+        { status, ...(type === 'messages' ? { revision: item.revision } : {}) }));
+      return button;
+    });
+    if (type === 'songs') {
+      const remove = h('button', { class: 'btn danger' }, icon('trash-2'), 'Eliminar');
+      remove.onclick = async () => {
+        if (!await ask({ title: 'Eliminar canción', body: [item.title || item.url], ok: 'Eliminar', danger: true, ic: 'trash-2' })) return;
+        await reviewAction(remove, () => api('DELETE', birthdayApi + '/manage/songs/' + item.id));
+      };
+      actions.push(remove);
+    }
+    return actions;
+  }
+
+  if (section === 'songs') {
+    panel.append(h('section', { class: 'card birthday-panel' }, h('h2', {}, 'Agregar una canción'), birthdaySongForm(refresh)));
+  }
+  const list = h('div', { class: 'birthday-review-list' });
+  const rows = data[section];
+  let targetCard;
+  for (const item of rows) {
+    const card = section === 'songs' ? birthdaySongCard(item, true, buttons(item, 'songs')) :
+      h('article', { class: 'card birthday-entry', tabindex: -1 },
+        h('div', { class: 'birthday-panel-heading' }, h('h3', {}, item.display_name), birthdayBadge(item.status)),
+        h('p', {}, item.message), h('div', { class: 'birthday-actions' }, buttons(item, 'messages')));
+    list.append(card);
+    if (String(item.id) === String(target)) targetCard = card;
+  }
+  if (!rows.length) list.append(h('p', { class: 'birthday-muted' }, section === 'songs' ? 'Todavía no hay canciones.' : 'Todavía no hay mensajes.'));
+  panel.append(list);
+  if (targetCard) {
+    targetCard.classList.add('birthday-entry-target');
+    targetCard.focus();
+    targetCard.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function drawBirthdayCard(canvas, image, title, message) {
   canvas.width = 1500;
   canvas.height = 1000;
   const ctx = canvas.getContext('2d');
-  const paint = image => {
-    ctx.fillStyle = '#f4fbfc';
-    ctx.fillRect(0, 0, 1500, 1000);
-    if (image) ctx.drawImage(image, 0, 0, 1500, 1000);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#215969';
-    function block(value, x, top, width, height, font, size) {
-      if (!value) return;
-      for (; size >= 15; size--) {
-        ctx.font = font + size + 'px Georgia, serif';
-        const lines = [];
-        let line = '';
-        for (const word of value.split(/\s+/u)) {
-          const candidate = line ? line + ' ' + word : word;
-          if (ctx.measureText(candidate).width <= width) { line = candidate; continue; }
-          if (line) lines.push(line);
-          line = '';
-          for (const char of word) {
-            if (ctx.measureText(line + char).width > width) { lines.push(line); line = ''; }
-            line += char;
-          }
+  ctx.drawImage(image, 0, 0, 1500, 1000);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#215969';
+
+  function drawTextBlock(value, top, width, height, weight, size) {
+    if (!value) return;
+    const center = 750;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(center - width / 2, top, width, height);
+    ctx.clip();
+    for (; size >= 15; size--) {
+      ctx.font = weight + size + 'px Georgia, serif';
+      const lines = [];
+      let line = '';
+      for (const word of value.split(/\s+/u)) {
+        const candidate = line ? line + ' ' + word : word;
+        if (ctx.measureText(candidate).width <= width) {
+          line = candidate;
+          continue;
         }
         if (line) lines.push(line);
-        const leading = size * 1.22;
-        if (lines.length * leading > height) continue;
-        lines.forEach((text, i) => ctx.fillText(text, x, top + height / 2 + (i - (lines.length - 1) / 2) * leading));
-        return;
+        line = '';
+        for (const character of word) {
+          if (ctx.measureText(line + character).width > width) {
+            lines.push(line);
+            line = '';
+          }
+          line += character;
+        }
       }
+      if (line) lines.push(line);
+      const leading = size * 1.22;
+      if (lines.length * leading > height) continue;
+      lines.forEach((text, i) => ctx.fillText(text, center, top + height / 2 + (i - (lines.length - 1) / 2) * leading));
+      break;
     }
-    block(title, 750, 320, 640, 124, 'bold ', 43);
-    block(message, 750, 459, 620, 194, '', 36);
-  };
-  paint();
-  if (!template?.updated_at) return;
-  const image = new Image();
-  image.onload = () => paint(image);
-  image.src = birthdayApi + '/templates/' + encodeURIComponent(category) + '?v=' + encodeURIComponent(template.updated_at);
-}
-
-async function renderBirthdays(el) {
-  const { year, categories, members, messages } = await api('GET', birthdayApi);
-  const superadmin = S.me.role === 'superadmin';
-  const routes = member => birthdayApi + '/members/' + member.id;
-  const option = (key, label) => h('option', { value: key }, label);
-  const categorySelect = (value, label) => {
-    const control = h('select', { class: 'input', 'aria-label': label }, categories.map(c => option(c.id, c.label)));
-    control.value = value;
-    return control;
-  };
-  const field = (label, input) => h('label', { class: 'field' }, h('span', {}, label), input);
-  const save = async (button, action) => {
-    button.disabled = true;
-    try { await action(); toast('Cambios guardados'); await go('birthdays'); }
-    catch (error) { toast(error.message, 'err'); }
-    finally { button.disabled = false; }
-  };
-  const filter = categorySelect('', 'Filtrar por categoría');
-  filter.prepend(option('', 'Todas las categorías'));
-  filter.value = S.birthdayFilter || '';
-  const recipient = h('select', { class: 'input', 'aria-label': 'Cumpleañera o cumpleañero' });
-  const detail = h('div', { class: 'birthday-detail' });
-  const eligible = members.filter(m => m.birth_date && (!filter.value || m.category === filter.value));
-  recipient.append(...eligible.map(m => option(m.id, m.nickname)));
-  recipient.value = eligible.some(m => String(m.id) === S.birthdayMember) ? S.birthdayMember : String(eligible[0]?.id ?? '');
-  filter.onchange = () => go('birthdays', { birthdayFilter: filter.value });
-  recipient.onchange = () => go('birthdays', { birthdayMember: recipient.value });
-  el.append(h('h1', {}, 'Cumpleaños'), h('div', { class: 'toolbar glass' },
-    field('Categoría', filter), field('Integrante', recipient)), detail);
-
-  if (superadmin) {
-    const category = categorySelect(categories[0]?.id, 'Categoría de la plantilla');
-    const image = h('input', { class: 'input', type: 'file', accept: 'image/png', required: true });
-    const submit = h('button', { class: 'btn primary', type: 'submit' }, 'Subir plantilla');
-    const form = h('form', { class: 'card birthday-form' }, h('h2', {}, 'Plantillas por categoría'),
-      field('Categoría', category), field('Imagen PNG', image), submit);
-    form.onsubmit = event => {
-      event.preventDefault();
-      save(submit, async () => {
-        const response = await fetch(birthdayApi + '/templates/' + category.value, {
-          method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: image.files[0],
-        });
-        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'No se pudo subir la plantilla.');
-      });
-    };
-    el.append(form);
-    const unresolved = members.filter(m => !m.birthday_category && !m.proposed_category);
-    if (unresolved.length) {
-      const review = h('details', { class: 'card birthday-form' },
-        h('summary', {}, 'Categorías por revisar (' + unresolved.length + ')'));
-      for (const member of unresolved) {
-        const choice = categorySelect(member.category, 'Categoría de ' + member.nickname);
-        const button = h('button', { class: 'btn' }, 'Asignar');
-        button.onclick = () => save(button, () => api('PATCH', routes(member) + '/category', { category: choice.value }));
-        review.append(h('div', { class: 'birthday-review' },
-          field(member.nickname + (member.bias ? ' · ' + member.bias : ' · Sin bias'), choice), button));
-      }
-      el.append(review);
-    }
+    ctx.restore();
   }
 
-  const member = eligible.find(m => String(m.id) === recipient.value);
-  if (!member) {
-    detail.append(h('p', {}, 'No hay integrantes con cumpleaños registrado en esta categoría.'));
-    return;
-  }
-  S.birthdayMember = String(member.id);
-  const entries = messages.filter(m => m.member_id === member.id);
-  const mine = entries.find(m => m.admin_id === S.me.id);
-  const approved = entries.find(m => m.approved);
-  const date = new Date(member.birth_date + 'T12:00:00Z');
-  const day = new Intl.DateTimeFormat('es-EC', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(date);
-  const age = year - date.getUTCFullYear();
-  const greeting = `Hoy, ${day}, AlwaysTxT te desea ${age === 1 ? 'un feliz primer año' : 'unos felices ' + age + ' años'}, ${member.nickname}.`;
-  const template = categories.find(c => c.id === member.category);
-  const canvas = h('canvas', { class: 'birthday-preview', role: 'img', 'aria-label': greeting });
-  const area = h('textarea', { class: 'input', rows: 3, maxlength: birthdayLimit, placeholder: 'Escribe un mensaje si quieres agregar uno.' });
-  area.value = mine?.message || '';
-  const counter = h('span', { class: 'meta' });
-  const preview = h('input', { type: 'checkbox' });
-  function redraw() {
-    counter.textContent = area.value.length + ' / ' + birthdayLimit;
-    const message = preview.checked ? area.value.trim() : approved?.message;
-    canvas.setAttribute('aria-label', [greeting, message].filter(Boolean).join(' '));
-    drawBirthday(canvas, member.category, greeting, message, template);
-  }
-  area.oninput = () => { preview.checked = true; redraw(); };
-  preview.onchange = redraw;
-  redraw();
-  const button = h('button', { class: 'btn primary', type: 'submit' }, 'Guardar mensaje');
-  const form = h('form', { class: 'card birthday-form' }, field('Mensaje para el cumpleañero (opcional)', area), counter,
-    h('label', {}, preview, ' Ver mi borrador en la tarjeta'), button,
-    mine ? h('p', {}, mine.approved ? 'Tu mensaje está aprobado.' : 'Tu mensaje está pendiente de aprobación.') : null);
-  form.onsubmit = event => {
-    event.preventDefault();
-    save(button, () => api('PUT', routes(member) + '/message', { message: area.value }));
-  };
-  detail.append(canvas);
-  if (!template?.updated_at) detail.append(h('p', {}, 'Esta categoría aún no tiene plantilla cargada.'));
-  detail.append(form);
-
-  if (superadmin) {
-    const category = categorySelect(member.category, 'Categoría del integrante');
-    const assign = h('button', { class: 'btn' }, 'Guardar categoría');
-    assign.onclick = () => save(assign, () => api('PATCH', routes(member) + '/category', { category: category.value }));
-    const approvals = h('section', { class: 'card birthday-form' }, h('h2', {}, 'Mensajes para revisar'),
-      field('Categoría del integrante', category), assign);
-    for (const entry of entries) {
-      const approve = h('button', { class: 'btn' }, entry.approved ? 'Quitar aprobación' : 'Aprobar mensaje');
-      approve.onclick = () => save(approve, () => api('PUT', routes(member) + '/approval', {
-        admin_id: entry.approved ? null : entry.admin_id, message: entry.message,
-      }));
-      approvals.append(h('article', { class: 'birthday-entry' }, h('strong', {}, entry.display_name),
-        h('p', {}, entry.message), approve));
-    }
-    if (!entries.length) approvals.append(h('p', {}, 'Todavía no hay mensajes.'));
-    detail.append(approvals);
-  }
+  drawTextBlock(title, 320, 640, 124, 'bold ', 43);
+  drawTextBlock(message, 459, 620, 194, '', 36);
 }

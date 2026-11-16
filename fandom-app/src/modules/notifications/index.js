@@ -1,7 +1,7 @@
 const db=require('../../core/db'),{requireAuth}=require('../auth/service'),{ah}=require('../../core/http');
 exports.register=({app})=>{
   app.get('/api/notifications',requireAuth,ah(async(req,res)=>{
-    const [items,u]=await Promise.all([db.all(`SELECT n.id,n.type,n.event_id,n.message,n.read_at,n.created_at,e.kind,
+    const [items,u]=await Promise.all([db.all(`SELECT n.id,n.type,n.event_id,n.birthday_item_id,n.message,n.read_at,n.created_at,e.kind,
       CASE WHEN n.type='invite' AND e.status='scheduled' AND ec.status='pending' THEN 1 ELSE 0 END AS can_respond
       FROM notifications n LEFT JOIN events e ON e.id=n.event_id
       LEFT JOIN event_collaborators ec ON ec.event_id=n.event_id AND ec.admin_id=n.admin_id

@@ -158,17 +158,28 @@ const KIND = {
 const TABS = [
   { id: 'home', label: 'Inicio', ic: 'layout-grid' }, { id: 'members', label: 'Integrantes', ic: 'users' },
   { id: 'dynamic', label: 'Dinámicas', ic: 'party-popper' }, { id: 'voting', label: 'Votaciones', ic: 'vote' },
-  { id: 'birthdays', label: 'Cumpleaños', ic: 'cake' },
   { id: 'admins', label: 'Administradoras', ic: 'shield-check', su: true },
 ];
-const tabOf = () => S.view === 'home' ? 'home' : S.view === 'members' ? 'members' : S.view === 'admins' ? 'admins' : S.view === 'birthdays' ? 'birthdays' : S.kind;
+const tabOf = () => {
+  if (S.view === 'birthdayCalendar') return 'members';
+  if (S.view === 'birthdayAdministration') return 'admins';
+  if (S.view === 'events' || S.view === 'evd') return S.kind;
+  return S.view;
+};
 function syncTabs() { $$('.tab').forEach(t => t.dataset.tab === tabOf() ? t.setAttribute('aria-current', 'page') : t.removeAttribute('aria-current')); }
-const VIEWS = { home: renderHome, members: renderMembers, events: renderEvents, evd: renderEvDetail, admins: renderAdmins, birthdays: renderBirthdays };
+const VIEWS = {
+  home: renderHome, members: renderMembers, events: renderEvents, evd: renderEvDetail, admins: renderAdmins,
+  birthdayCalendar: renderBirthdayCalendar, birthdayAdministration: renderBirthdayAdministration, personalization: renderPersonalization,
+};
 async function go(view, opts = {}) {
   selStop(); closeNotes(); Object.assign(S, { view }, opts); syncTabs();
   const el = h('div', { class: 'view-in' }); $('#view').replaceChildren(el); window.scrollTo(0, 0);
   try { await VIEWS[view](el); } catch (x) { if (S.me) el.replaceChildren(emptyState('triangle-alert', 'No se pudo cargar', x.message)); }
-  syncTabs(); document.title = ({ home: 'Inicio', members: 'Integrantes', events: KIND[S.kind].many, evd: 'Detalle', admins: 'Administradoras', birthdays: 'Cumpleaños' })[view] + ' · Panel del fandom';
+  if (!el.isConnected) return;
+  syncTabs(); document.title = ({
+    home: 'Inicio', members: 'Integrantes', events: KIND[S.kind].many, evd: 'Detalle', admins: 'Administradoras',
+    birthdayCalendar: 'Calendario de cumpleaños', birthdayAdministration: 'Plantillas de cumpleaños', personalization: 'Personalización',
+  })[view] + ' · Panel del fandom';
 }
 function emptyState(ic, title, text, cta) {
   return h('div', { class: 'empty glass' }, h('span', { class: 'tile-ic' }, icon(ic)), h('h3', {}, title), text ? h('p', {}, text) : null, cta);
@@ -183,7 +194,7 @@ function enter(a, msg) {
   $('#me').title = 'Mi perfil';
   loadOwnProfile(a);
   $('#tabs').replaceChildren(...TABS.filter(t => !t.su || a.role === 'superadmin').map(t =>
-    h('button', { class: 'tab', 'data-tab': t.id, onclick: () => t.id === 'home' ? go('home') : t.id === 'members' ? go('members') : t.id === 'admins' ? go('admins') : t.id === 'birthdays' ? go('birthdays') : go('events', { kind: t.id, hist: false }) }, icon(t.ic), h('span', {}, t.label))));
+    h('button', { class: 'tab', 'data-tab': t.id, onclick: () => t.id === 'home' ? go('home') : t.id === 'members' ? go('members') : t.id === 'admins' ? go('admins') : go('events', { kind: t.id, hist: false }) }, icon(t.ic), h('span', {}, t.label))));
   S.intro = true; go('home'); loadNotes(); S.poll = setInterval(loadNotes, 30000);
   if (a.must_change_password) $('#pdlg').showModal();
 }
@@ -206,13 +217,22 @@ function closeNotes() { $('#notes').classList.remove('open'); $('#notes').inert 
 async function loadNotes() {
   try { notesData = await api('GET', '/api/notifications'); } catch { return; }
   const c = $('#bellc'); c.hidden = !notesData.unread; c.textContent = notesData.unread;
-  $('#notes').replaceChildren(h('h2', {}, 'Notificaciones'), ...(notesData.items.length ? notesData.items.map(i =>
-    h('div', { class: 'nt' + (i.read_at ? '' : ' un') }, h('span', { class: 'tile-ic' }, icon(i.type === 'invite' ? 'mail-open' : 'user-check')),
-      h('div', {}, h('p', {}, i.message),
-        i.can_respond || i.event_id ? h('div', { class: 'acts' },
-          i.can_respond ? [h('button', { class: 'btn primary', onclick: () => respond(i.event_id, true) }, icon('check'), 'Aceptar'), h('button', { class: 'btn', onclick: () => respond(i.event_id, false) }, icon('x'), 'Rechazar')] : null,
-          i.event_id ? h('button', { class: 'btn ghost', onclick: () => go('evd', { evId: i.event_id }) }, 'Ver') : null) : null))
-  ) : [h('div', { class: 'empty' }, h('span', { class: 'tile-ic' }, icon('inbox')), h('p', {}, 'No tienes notificaciones.'))]));
+  const entries = notesData.items.map(i => {
+    const actions = [];
+    const birthdayTab = { birthday_message: 'messages', birthday_song: 'songs' }[i.type];
+    if (i.can_respond) actions.push(
+      h('button', { class: 'btn primary', onclick: () => respond(i.event_id, true) }, icon('check'), 'Aceptar'),
+      h('button', { class: 'btn', onclick: () => respond(i.event_id, false) }, icon('x'), 'Rechazar'));
+    if (i.event_id) actions.push(h('button', { class: 'btn ghost', onclick: () => go('evd', { evId: i.event_id }) }, 'Ver'));
+    if (birthdayTab && S.me?.role === 'superadmin') actions.push(h('button', { class: 'btn ghost',
+      onclick: () => go('birthdayAdministration', { birthdayReviewTab: birthdayTab, birthdayReviewItem: i.birthday_item_id }) }, 'Ver'));
+    const symbol = birthdayTab ? 'cake' : i.type === 'invite' ? 'mail-open' : 'user-check';
+    return h('div', { class: 'nt' + (i.read_at ? '' : ' un') }, h('span', { class: 'tile-ic' }, icon(symbol)),
+      h('div', {}, h('p', {}, i.message), actions.length ? h('div', { class: 'acts' }, actions) : null));
+  });
+  $('#notes').replaceChildren(h('h2', {}, 'Notificaciones'), ...(entries.length ? entries : [
+    h('div', { class: 'empty' }, h('span', { class: 'tile-ic' }, icon('inbox')), h('p', {}, 'No tienes notificaciones.')),
+  ]));
 }
 $('#bell').onclick = async e => {
   e.stopPropagation(); const n = $('#notes');
@@ -279,6 +299,7 @@ async function renderMembers(el) {
   fi.onchange = () => { M.inactive = fi.checked; load(); };
   put(el,
     h('div', { class: 'head' }, h('div', { class: 'titlebox' }, h('span', { class: 'tile-ic' }, icon('users')), h('h1', {}, 'Integrantes', count))),
+    memberSections('members'),
     h('div', { class: 'toolbar glass' }, h('label', { class: 'input-ic grow' }, icon('search'), q), fc,
       h('label', { class: 'switch' }, fi, h('span', { class: 'track' }), 'Incluir bajas'), h('span', { class: 'sp' }), selToggleBtn(cfg),
       h('button', { class: 'btn primary', onclick: () => openMember() }, icon('plus'), 'Nuevo integrante')),
@@ -616,7 +637,7 @@ async function renderAdmins(el) {
     h('div', { class: 'head' }, h('div', { class: 'titlebox' }, h('span', { class: 'tile-ic' }, icon('shield-check')), h('h1', {}, 'Administradoras', count))),
     h('div', { class: 'toolbar glass' }, h('p', { class: 'grow', style: 'color:var(--ink-2);padding:0 6px' }, 'Quien tenga historial se da de baja en lugar de borrarse.'), selToggleBtn(cfg),
       h('button', { class: 'btn primary', onclick: () => openAdmin(null) }, icon('user-plus'), 'Nueva administradora'),
-      h('button', { class: 'btn', onclick: () => go('birthdays') }, icon('cake'), 'Plantillas de cumpleaños')),
+      h('button', { class: 'btn', onclick: () => go('birthdayAdministration', { birthdayReviewTab: 'templates', birthdayReviewItem: null }) }, icon('cake'), 'Plantillas de cumpleaños')),
     reveal, grid);
   await load();
 }
@@ -746,6 +767,10 @@ $('#me').onclick = async () => {
     $('#profile-preview').replaceChildren(profileAvatar(p));
     $('#profile-dialog').showModal();
   } catch (error) { if (S.me === account) toast(error.message, 'err'); }
+};
+$('#profile-personalization').onclick = () => {
+  $('#profile-dialog').close();
+  go('personalization');
 };
 $('#profile-birth').oninput = e => {
   $('#profile-age').textContent = e.target.value ? age(e.target.value) + ' años' : '';

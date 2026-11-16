@@ -158,16 +158,17 @@ const KIND = {
 const TABS = [
   { id: 'home', label: 'Inicio', ic: 'layout-grid' }, { id: 'members', label: 'Integrantes', ic: 'users' },
   { id: 'dynamic', label: 'Dinámicas', ic: 'party-popper' }, { id: 'voting', label: 'Votaciones', ic: 'vote' },
+  { id: 'birthdays', label: 'Cumpleaños', ic: 'cake' },
   { id: 'admins', label: 'Administradoras', ic: 'shield-check', su: true },
 ];
-const tabOf = () => S.view === 'home' ? 'home' : S.view === 'members' ? 'members' : S.view === 'admins' ? 'admins' : S.kind;
+const tabOf = () => S.view === 'home' ? 'home' : S.view === 'members' ? 'members' : S.view === 'admins' ? 'admins' : S.view === 'birthdays' ? 'birthdays' : S.kind;
 function syncTabs() { $$('.tab').forEach(t => t.dataset.tab === tabOf() ? t.setAttribute('aria-current', 'page') : t.removeAttribute('aria-current')); }
-const VIEWS = { home: renderHome, members: renderMembers, events: renderEvents, evd: renderEvDetail, admins: renderAdmins };
+const VIEWS = { home: renderHome, members: renderMembers, events: renderEvents, evd: renderEvDetail, admins: renderAdmins, birthdays: renderBirthdays };
 async function go(view, opts = {}) {
   selStop(); closeNotes(); Object.assign(S, { view }, opts); syncTabs();
   const el = h('div', { class: 'view-in' }); $('#view').replaceChildren(el); window.scrollTo(0, 0);
   try { await VIEWS[view](el); } catch (x) { if (S.me) el.replaceChildren(emptyState('triangle-alert', 'No se pudo cargar', x.message)); }
-  syncTabs(); document.title = ({ home: 'Inicio', members: 'Integrantes', events: KIND[S.kind].many, evd: 'Detalle', admins: 'Administradoras' })[view] + ' · Panel del fandom';
+  syncTabs(); document.title = ({ home: 'Inicio', members: 'Integrantes', events: KIND[S.kind].many, evd: 'Detalle', admins: 'Administradoras', birthdays: 'Cumpleaños' })[view] + ' · Panel del fandom';
 }
 function emptyState(ic, title, text, cta) {
   return h('div', { class: 'empty glass' }, h('span', { class: 'tile-ic' }, icon(ic)), h('h3', {}, title), text ? h('p', {}, text) : null, cta);
@@ -182,7 +183,7 @@ function enter(a, msg) {
   $('#me').title = 'Mi perfil';
   loadOwnProfile(a);
   $('#tabs').replaceChildren(...TABS.filter(t => !t.su || a.role === 'superadmin').map(t =>
-    h('button', { class: 'tab', 'data-tab': t.id, onclick: () => t.id === 'home' ? go('home') : t.id === 'members' ? go('members') : t.id === 'admins' ? go('admins') : go('events', { kind: t.id, hist: false }) }, icon(t.ic), h('span', {}, t.label))));
+    h('button', { class: 'tab', 'data-tab': t.id, onclick: () => t.id === 'home' ? go('home') : t.id === 'members' ? go('members') : t.id === 'admins' ? go('admins') : t.id === 'birthdays' ? go('birthdays') : go('events', { kind: t.id, hist: false }) }, icon(t.ic), h('span', {}, t.label))));
   S.intro = true; go('home'); loadNotes(); S.poll = setInterval(loadNotes, 30000);
   if (a.must_change_password) $('#pdlg').showModal();
 }
@@ -614,7 +615,8 @@ async function renderAdmins(el) {
   put(el,
     h('div', { class: 'head' }, h('div', { class: 'titlebox' }, h('span', { class: 'tile-ic' }, icon('shield-check')), h('h1', {}, 'Administradoras', count))),
     h('div', { class: 'toolbar glass' }, h('p', { class: 'grow', style: 'color:var(--ink-2);padding:0 6px' }, 'Quien tenga historial se da de baja en lugar de borrarse.'), selToggleBtn(cfg),
-      h('button', { class: 'btn primary', onclick: () => openAdmin(null) }, icon('user-plus'), 'Nueva administradora')),
+      h('button', { class: 'btn primary', onclick: () => openAdmin(null) }, icon('user-plus'), 'Nueva administradora'),
+      h('button', { class: 'btn', onclick: () => go('birthdays') }, icon('cake'), 'Plantillas de cumpleaños')),
     reveal, grid);
   await load();
 }

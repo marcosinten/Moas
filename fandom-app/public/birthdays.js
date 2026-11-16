@@ -245,7 +245,7 @@ async function renderBirthdayAdministration(el) {
   }
 }
 
-function drawBirthdayCard(canvas, image, title, message) {
+function drawBirthdayCard(canvas, image, title, message, qrImage) {
   canvas.width = 1500;
   canvas.height = 1000;
   const ctx = canvas.getContext('2d');
@@ -292,4 +292,11 @@ function drawBirthdayCard(canvas, image, title, message) {
 
   drawTextBlock(title, 320, 640, 124, 'bold ', 43);
   drawTextBlock(message, 459, 620, 194, '', 36);
+
+  if (qrImage) {
+    // Keep the white quiet zone from the generated QR so phone cameras can scan it.
+    ctx.drawImage(qrImage, 646, 674, 208, 208);
+    ctx.font = 'bold 28px Georgia, serif';
+    ctx.fillText('Escanea tu regalo', 750, 917);
+  }
 }

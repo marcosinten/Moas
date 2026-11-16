@@ -163,6 +163,13 @@ dialog.birthday-card-dialog .dlg {
   border-radius: 12px;
 }
 
+.birthday-song-link {
+  display: inline-flex;
+  align-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .birthday-calendar-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(270px, 1fr);

@@ -30,13 +30,15 @@ async function openBirthdayCard(member, date, trigger) {
     const greeting = 'Hoy, ' + day + ', AlwaysTxT te desea ' + age + ', ' + card.name + '.';
     const image = new Image();
     image.src = birthdayTemplateUrl(card.template);
-    try { await image.decode(); }
+    const qrImage = card.qr ? new Image() : null;
+    if (qrImage) qrImage.src = card.qr;
+    try { await Promise.all([image.decode(), qrImage?.decode()]); }
     catch { throw new Error('No se pudo abrir la plantilla. Inténtalo nuevamente.'); }
     if (!trigger.isConnected) return;
     birthdayDialog('Tarjeta de ' + card.name, (body, close) => {
       const canvas = h('canvas', { class: 'birthday-preview', role: 'img',
         'aria-label': [greeting, card.message].filter(Boolean).join(' ') });
-      drawBirthdayCard(canvas, image, greeting, card.message);
+      drawBirthdayCard(canvas, image, greeting, card.message, qrImage);
       const download = h('button', { class: 'btn primary' }, 'Descargar PNG');
       download.onclick = () => {
         canvas.toBlob(blob => {
@@ -46,7 +48,13 @@ async function openBirthdayCard(member, date, trigger) {
           setTimeout(() => URL.revokeObjectURL(url), 1000);
         });
       };
-      body.append(canvas, h('div', { class: 'dlg-f' }, close, download));
+      body.append(canvas);
+      if (card.song) {
+        body.append(h('a', { class: 'btn birthday-song-link', href: card.song.url,
+          target: '_blank', rel: 'noopener noreferrer' },
+        'Escuchar ' + (card.song.title || 'la canción') + (card.song.provider ? ' en ' + card.song.provider : '')));
+      }
+      body.append(h('div', { class: 'dlg-f' }, close, download));
       body.parentElement.classList.add('birthday-card-dialog');
       body.parentElement.addEventListener('close', () => {
         if (trigger.isConnected) trigger.focus();

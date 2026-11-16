@@ -1,4 +1,5 @@
 const express = require('express');
+const QRCode = require('qrcode');
 const { ah } = require('../../core/http');
 const { requireAuth, requireRole } = require('../auth/service');
 const { isoDate, id } = require('../../core/validate');
@@ -174,16 +175,28 @@ exports.register = ({ app, db }) => {
       FROM members WHERE id=$1 AND active=1`, [memberId]);
     const occurrence = member && birthdayOccurrence(member.birth_date, Number(date.slice(0, 4)));
     if (occurrence?.date !== date) return missing(res, 'No hay un cumpleaños de esta integrante en esa fecha.');
-    const [templates, messages] = await Promise.all([
+    const [templates, messages, songs] = await Promise.all([
       db.all(`SELECT t.category AS id,t.updated_at,c.label FROM birthday_templates t
         JOIN birthday_categories c ON c.id=t.category ORDER BY t.category`),
       db.all(`SELECT m.message FROM birthday_profile_messages m JOIN admins a ON a.id=m.admin_id
         WHERE m.status='approved' AND a.active=1 ORDER BY m.id`),
+      db.all(`SELECT s.url,s.title,s.provider FROM birthday_songs s JOIN admins a ON a.id=s.admin_id
+        WHERE s.status='approved' AND a.active=1 ORDER BY s.id`),
     ]);
     const template = selectForBirthday(templates, date, memberId);
     if (!template) return missing(res, 'Carga una plantilla en Administración para generar tarjetas.');
     const message = selectForBirthday(messages, date, memberId);
-    res.json({ name: member.nickname, date, age: occurrence.age, template, message: message?.message || '' });
+    const song = selectForBirthday(songs, date, memberId);
+    const qr = song && await QRCode.toDataURL(song.url, {
+      errorCorrectionLevel: 'M', margin: 4, width: 208,
+      color: { dark: '#1a3441', light: '#ffffffff' },
+    });
+    res.json({
+      name: member.nickname, date, age: occurrence.age, template,
+      message: message?.message || '',
+      song: song ? { title: song.title, provider: song.provider, url: song.url } : null,
+      qr: qr || null,
+    });
   }));
 };
 

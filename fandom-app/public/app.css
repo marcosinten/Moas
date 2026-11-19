@@ -336,7 +336,8 @@ button.me{color:inherit;cursor:pointer}
 [data-palette="mint"]{--profile-tint:#8ce1c6}
 [data-palette="peach"]{--profile-tint:#ffc3a2}
 #app[data-palette]:not([data-palette="default"]) .card,
-.card.admin[data-palette]:not([data-palette="default"]){
+.card.admin[data-palette]:not([data-palette="default"]),
+.card.pcard[data-palette]:not([data-palette="default"]){
   background:color-mix(in srgb,var(--profile-tint) 14%,#1d1428);
   border-color:color-mix(in srgb,var(--profile-tint) 40%,#271931);
 }

@@ -5,6 +5,7 @@ const { requireAuth } = require('../auth/service');
 const { ah } = require('../../core/http');
 
 const fields = 'id, display_name, profile_birth_date, profile_country, profile_bias, profile_palette, profile_photo IS NOT NULL AS has_photo';
+const {normalize:normalizeBias,labels:biasLabels}=require('../../core/bias');
 const palettes = ['default', 'rose', 'lavender', 'mint', 'peach'];
 
 exports.register = ({ app }) => {
@@ -24,9 +25,9 @@ exports.register = ({ app }) => {
     const name = v.clean(display_name, 60);
     const date = birth_date ? v.isoDate(birth_date) : null;
     const place = country ? normalizeCountry(country) : null;
-    const favorite = bias ? v.clean(bias, 60) : null;
+    const favorite = normalizeBias(bias);
     if (!name || (birth_date && (!date || date < '1900-01-01' || date > new Date().toISOString().slice(0, 10)))
-      || (country && !place) || (bias && !favorite) || !palettes.includes(palette)) {
+      || (country && !place) || favorite === undefined || !palettes.includes(palette)) {
       return res.status(400).json({ error: 'Revisa el nombre, la fecha de nacimiento, el país, el bias y la paleta.' });
     }
 
@@ -46,7 +47,7 @@ exports.register = ({ app }) => {
       SET display_name=$1, profile_birth_date=$2, profile_country=$3, profile_bias=$4, profile_palette=$5,
           profile_photo=CASE WHEN $6 THEN $7::bytea ELSE profile_photo END
       WHERE id=$8 RETURNING ${fields}`,
-    [name, date, place, favorite, palette, photo !== undefined, bytes, req.admin.id]);
+    [name, date, place, favorite && biasLabels[favorite], palette, photo !== undefined, bytes, req.admin.id]);
     res.json(profile);
   }));
 };

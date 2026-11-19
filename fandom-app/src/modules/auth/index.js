@@ -24,12 +24,12 @@ exports.register=({app})=>{
     if(req.admin.role!=='superadmin') return res.status(403).json({error:'Sin permiso'});
     res.json(await db.all(`SELECT id,username,display_name,role,active,must_change_password,created_at,
       profile_birth_date,profile_country,profile_bias,profile_palette,profile_photo IS NOT NULL AS has_photo,
-      ((((SELECT COUNT(*) FROM events WHERE created_by=a.id OR supervisor_id=a.id)+(SELECT COUNT(*) FROM event_collaborators WHERE admin_id=a.id))>0))::int AS has_history
+      ((((SELECT COUNT(*) FROM events WHERE created_by=a.id OR supervisor_id=a.id)+(SELECT COUNT(*) FROM event_collaborators WHERE admin_id=a.id)+(SELECT COUNT(*) FROM admin_participations WHERE admin_id=a.id))>0))::int AS has_history
       FROM admins a ORDER BY active DESC, lower(display_name)`));
   }));
   const ROLES=['admin','superadmin'], newTemp=()=>crypto.randomBytes(9).toString('base64url');
   const activeSupers=async(x,exceptId)=>(await x.one("SELECT COUNT(*)::int c FROM admins WHERE role='superadmin' AND active=1 AND id<>$1",[exceptId])).c;
-  const hasHistory=async(x,id)=>(await x.one('SELECT ((SELECT COUNT(*) FROM events WHERE created_by=$1 OR supervisor_id=$1)+(SELECT COUNT(*) FROM event_collaborators WHERE admin_id=$1))::int c',[id])).c>0;
+  const hasHistory=async(x,id)=>(await x.one('SELECT ((SELECT COUNT(*) FROM events WHERE created_by=$1 OR supervisor_id=$1)+(SELECT COUNT(*) FROM event_collaborators WHERE admin_id=$1)+(SELECT COUNT(*) FROM admin_participations WHERE admin_id=$1))::int c',[id])).c>0;
   // Elimina; si ya participo en dinamicas/votaciones se da de baja (no se borra) para no romper el historial.
   // "x" es la transaccion (t) desde la que se llama.
   async function removeAdmin(x,id,me){

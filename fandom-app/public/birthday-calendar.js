@@ -114,10 +114,10 @@ async function renderBirthdayCalendar(el) {
         const view = h('button', { class: 'btn primary', type: 'button', 'aria-label': 'Ver plantilla de ' + person.name },
           'Ver plantilla');
         view.onclick = () => openBirthdayCard(person, date, view);
-        return h('li', { class: 'birthday-person' }, avatar(person.name),
-          h('div', { class: 'birthday-person-name' }, h('strong', {}, person.name),
-            h('small', { class: 'birthday-muted' }, person.age + (person.age === 1 ? ' año' : ' años'))),
-          withinWindow ? view : null);
+        const info = h('button', { class: 'birthday-person-name birthday-person-info', type: 'button', 'aria-label': 'Ver datos de ' + person.name,
+          onclick: () => openBirthdayMember(person.id) }, h('strong', {}, person.name, person.is_admin ? ' · Administradora' : ''),
+            h('small', { class: 'birthday-muted' }, person.age + (person.age === 1 ? ' año' : ' años')));
+        return h('li', { class: 'birthday-person' }, person.is_admin ? profileAvatar({id:-person.id,display_name:person.name,has_photo:true}) : avatar(person.name), info, withinWindow ? view : null);
       })));
   }
 
@@ -181,4 +181,20 @@ async function renderBirthdayCalendar(el) {
   }
 
   await loadMonth(S.birthdayMonth);
+}
+
+async function openBirthdayMember(id) {
+  try {
+    const m = await api('GET', birthdayApi + '/calendar/' + id + '/member');
+    birthdayDialog('Datos de ' + m.nickname, (body, close) => {
+      body.append(h('article', { class: 'card birthday-entry' },
+        h('h3', {}, m.nickname),
+        m.country ? h('p', {}, 'País: ' + m.country) : null,
+        m.birth_date ? h('p', {}, 'Nacimiento: ' + m.birth_date) : null,
+        m.bias ? h('p', {}, 'Bias: ' + m.bias) : null,
+        m.phone ? h('p', {}, 'Celular / usuario: ' + m.phone) : null,
+        m.phone ? h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(m.phone); toast('Contacto copiado'); } catch { toast('No se pudo copiar', 'err'); } } }, 'Copiar contacto') : null));
+      body.append(h('div', { class: 'dlg-f' }, close));
+    });
+  } catch (error) { toast(error.message, 'err'); }
 }

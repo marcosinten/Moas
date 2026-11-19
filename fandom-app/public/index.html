@@ -61,10 +61,10 @@
     <header class="dlg-h"><span id="profile-preview"></span><h2 id="profile-title">Mi perfil</h2></header>
     <label class="field"><span>Nombre visible</span><input class="input" id="profile-name" maxlength="60" required></label>
     <div class="row2">
-      <label class="field"><span>Fecha de nacimiento</span><input class="input" id="profile-birth" type="date" min="1900-01-01"><small id="profile-age" aria-live="polite"></small></label>
+      <label class="field"><span>Fecha de nacimiento (cumpleaños)</span><input class="input" id="profile-birth" type="date" min="1900-01-01"><small id="profile-age" aria-live="polite"></small></label>
       <label class="field"><span>País</span><select class="input" id="profile-country"></select></label>
     </div>
-    <label class="field"><span>Bias</span><input class="input" id="profile-bias" maxlength="60"></label>
+    <label class="field"><span>Bias</span><select class="input" id="profile-bias"></select></label>
     <label class="field"><span>Foto de perfil</span><input class="input" id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
     <label class="chk"><input id="profile-remove" type="checkbox">Quitar foto actual</label>
     <label class="field"><span>Color de tarjetas</span><select class="input" id="profile-palette">
@@ -84,7 +84,7 @@
     <label class="field"><span>Ingreso al grupo</span><input class="input" id="m_j" type="date"></label>
   </div>
   <label class="field"><span>País <small>(opcional)</small></span><select class="input" id="m_c"></select></label>
-  <label class="field"><span>Bias (opcional)</span><input class="input" id="m_bias" maxlength="60"></label>
+  <label class="field"><span>Bias (opcional)</span><select class="input" id="m_bias"></select></label>
   <label class="field"><span>Celular / usuario (opcional)</span><input class="input" id="m_phone" type="text" maxlength="80" placeholder="+593 999 123 456 o @usuario"></label>
   <label class="switch" id="m_al"><input type="checkbox" id="m_a"><span class="track"></span>Activo en el grupo</label>
   <p class="form-err" role="alert"></p>
@@ -154,6 +154,7 @@
   </div>
 </dialog>
 <script src="/countries.js"></script>
+<script src="/biases.js"></script>
 <script src="/birthdays.js"></script>
 <script src="/birthday-calendar.js"></script>
 <script src="/app.js"></script>

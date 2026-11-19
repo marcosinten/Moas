@@ -365,3 +365,7 @@ dialog.birthday-card-dialog .dlg {
     padding-inline: 8px;
   }
 }
+
+.birthday-person-info { text-align:left; background:none; border:0; color:inherit; cursor:pointer; min-width:0; padding:4px; }
+.birthday-person-info:hover strong { text-decoration:underline; }
+.birthday-person-info:focus-visible { outline:2px solid var(--pink,#ff5c9d); border-radius:6px; }

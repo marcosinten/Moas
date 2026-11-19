@@ -1,4 +1,5 @@
 const normalizeCountry=require('../../core/country');
+const {normalize:normalizeBias}=require('../../core/bias');
 const db=require('../../core/db'),v=require('../../core/validate'),{requireAuth}=require('../auth/service'),{ah}=require('../../core/http');
 const today=()=>new Date().toISOString().slice(0,10);
 function parse(b){
@@ -6,8 +7,8 @@ function parse(b){
   let birth=null; if(b.birth_date){birth=v.isoDate(b.birth_date); if(!birth||birth>today()||birth<'1940-01-01'){e.push('Fecha de nacimiento invalida');birth=null;}}
   let country=null; if(b.country){country=normalizeCountry(b.country); if(!country) e.push('Pais invalido');}
   let joined=today(); if(b.joined_at){joined=v.isoDate(b.joined_at); if(!joined) e.push('Fecha de ingreso invalida');}
-  const bias=b.bias ? v.clean(b.bias,60) : null;
-  if(b.bias && !bias) e.push('Bias inválido (máx. 60 caracteres)');
+  const bias=normalizeBias(b.bias);
+  if(bias===undefined) e.push('Selecciona un bias de la lista');
   let phone=null;
   if(b.phone != null && b.phone !== ''){
     phone=v.clean(b.phone,80);
@@ -23,22 +24,22 @@ exports.register=({app})=>{
     if(q){a.push('%'+q.replace(/[%_]/g,'')+'%');w.push(`m.nickname ILIKE $${a.length}`);}
     if(c){a.push(c);w.push(`m.country=$${a.length}`);}
     if(req.query.inactive!=='1') w.push('m.active=1');
-    res.json(await db.all(`SELECT m.id,m.nickname,m.birth_date,m.country,m.joined_at,m.active,m.phone,m.bias,m.created_by,a.display_name creator_name
-      FROM members m LEFT JOIN admins a ON a.id=m.created_by
+    res.json(await db.all(`SELECT m.id,m.nickname,m.birth_date,m.country,m.joined_at,m.active,m.phone,COALESCE(c.label,m.bias) bias,m.birthday_category,m.created_by,a.display_name creator_name
+      FROM members m LEFT JOIN admins a ON a.id=m.created_by LEFT JOIN birthday_categories c ON c.id=m.birthday_category
       ${w.length?'WHERE '+w.join(' AND '):''} ORDER BY lower(m.nickname)`,a));
   }));
   app.get('/api/members/countries',requireAuth,ah(async(req,res)=>res.json((await db.all("SELECT DISTINCT country FROM members WHERE country IS NOT NULL ORDER BY country")).map(r=>r.country))));
   app.post('/api/members',requireAuth,ah(async(req,res)=>{
     const p=parse(req.body); if(p.e.length) return res.status(400).json({error:p.e.join('. ')});
     if(await dup(p.nickname)) return res.status(409).json({error:'Ya existe un integrante con ese apodo'});
-    const r=await db.one('INSERT INTO members(nickname,birth_date,country,joined_at,created_by,bias,phone) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',[p.nickname,p.birth,p.country,p.joined,req.admin.id,p.bias,p.phone]);
+    const r=await db.one('INSERT INTO members(nickname,birth_date,country,joined_at,created_by,bias,phone,birthday_category) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',[p.nickname,p.birth,p.country,p.joined,req.admin.id,p.bias && require('../../core/bias').labels[p.bias],p.phone,p.bias]);
     res.status(201).json({id:r.id});
   }));
   app.patch('/api/members/:id',requireAuth,ah(async(req,res)=>{
     const id=v.id(req.params.id); if(!id||!(await db.one('SELECT 1 FROM members WHERE id=$1',[id]))) return res.status(404).json({error:'No existe'});
     const p=parse(req.body); if(p.e.length) return res.status(400).json({error:p.e.join('. ')});
     if(await dup(p.nickname,id)) return res.status(409).json({error:'Ya existe un integrante con ese apodo'});
-    await db.run('UPDATE members SET nickname=$1,birth_date=$2,country=$3,joined_at=$4,active=$5,bias=CASE WHEN $7 THEN $8::varchar ELSE bias END,phone=CASE WHEN $9 THEN $10::varchar ELSE phone END WHERE id=$6',[p.nickname,p.birth,p.country,p.joined,req.body.active===false?0:1,id,req.body.bias!==undefined,p.bias,req.body.phone!==undefined,p.phone]);
+    await db.run('UPDATE members SET nickname=$1,birth_date=$2,country=$3,joined_at=$4,active=$5,bias=CASE WHEN $7 THEN $8::varchar ELSE bias END,birthday_category=CASE WHEN $7 THEN $11::text ELSE birthday_category END,phone=CASE WHEN $9 THEN $10::varchar ELSE phone END WHERE id=$6',[p.nickname,p.birth,p.country,p.joined,req.body.active===false?0:1,id,req.body.bias!==undefined,p.bias && require('../../core/bias').labels[p.bias],req.body.phone!==undefined,p.phone,p.bias]);
     res.json({ok:true});
   }));
   // Si ya tiene historial de participaciones se da de baja (no se borra) para no dañar las estadisticas.

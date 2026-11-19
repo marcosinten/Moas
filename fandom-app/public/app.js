@@ -270,27 +270,39 @@ async function renderHome(el) {
 }
 
 /* ═════════ Integrantes ═════════ */
-const M = { q: '', country: '', inactive: false, list: [] };
+const M = { q: '', country: '', inactive: false, list: [], group: 'members' };
 async function renderMembers(el) {
   const grid = h('div', { class: 'grid', style: '--min:270px' });
+  const groups = h('nav', { class: 'birthday-sections', 'aria-label': 'Tipo de integrantes' });
   const cfg = {
-    noun: ['integrante', 'integrantes'], ids: () => M.list.map(m => String(m.id)), selectable: () => true,
+    noun: ['integrante', 'integrantes'], ids: () => M.group === 'members' ? M.list.map(m => String(m.id)) : [], selectable: () => M.group === 'members',
     actions: [{ label: 'Eliminar', icon: 'trash-2', danger: true, run: delMembers }],
   };
-  const q = h('input', { class: 'input', type: 'search', placeholder: 'Buscar por apodo', 'aria-label': 'Buscar integrante', value: M.q, autocomplete: 'off' });
+  const q = h('input', { class: 'input', type: 'search', placeholder: 'Buscar por nombre o apodo', 'aria-label': 'Buscar por nombre o apodo', value: M.q, autocomplete: 'off' });
   const fc = h('select', { class: 'input', 'aria-label': 'Filtrar por país', style: 'width:auto;min-width:160px' });
   const fi = h('input', { type: 'checkbox', checked: M.inactive });
   const count = h('span', { class: 'count-pill' });
+  const selectButton = selToggleBtn(cfg);
+  const addButton = h('button', { class: 'btn primary', onclick: () => openMember() }, icon('plus'), 'Nuevo integrante');
   async function load() {
-    const [list, cs] = await Promise.all([api('GET', `/api/members?q=${encodeURIComponent(M.q)}&country=${encodeURIComponent(M.country)}&inactive=${M.inactive ? 1 : 0}`), api('GET', '/api/members/countries')]);
+    const [list, cs, admins] = await Promise.all([api('GET', `/api/members?q=${encodeURIComponent(M.q)}&country=${encodeURIComponent(M.country)}&inactive=${M.inactive ? 1 : 0}`), api('GET', '/api/members/countries'), api('GET', '/api/admins')]);
     M.list = list;
-    fc.replaceChildren(new Option('Todos los países', ''), ...cs.map(x => new Option(x, x))); fc.value = M.country;
-    count.textContent = list.length;
-    const cards = list.map(memberCard);
+    const adminCards = admins.filter(a => (!M.q || a.display_name.toLocaleLowerCase('es').includes(M.q.toLocaleLowerCase('es')))
+      && (!M.country || a.profile_country === M.country));
+    const countries = [...new Set([...cs, ...admins.map(a => a.profile_country).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'es'));
+    fc.replaceChildren(new Option('Todos los países', ''), ...countries.map(x => new Option(x, x))); fc.value = M.country;
+    count.textContent = M.group === 'members' ? list.length : adminCards.length;
+    groups.replaceChildren(...[['members','Integrantes'],['admins','Administradoras']].map(([key,label]) =>
+      h('button', { type:'button', class:'btn ' + (M.group === key ? 'primary' : 'ghost'),
+        'aria-current': M.group === key ? 'page' : null,
+        onclick: () => { if (M.group !== key) { selStop(); M.group = key; load(); } } }, label)));
+    fi.parentElement.hidden = M.group !== 'members';
+    selectButton.hidden = addButton.hidden = M.group !== 'members';
+    const cards = M.group === 'members' ? list.map(memberCard) : adminCards.map(memberAdminCard);
     flip(grid, () => grid.replaceChildren(...(cards.length ? cards : [])));
     if (!cards.length) grid.replaceChildren(h('div', { style: 'grid-column:1/-1' }, M.q || M.country
-      ? emptyState('search', 'Sin resultados', 'Prueba con otro apodo o quita el filtro de país.')
-      : emptyState('users', 'Aún no hay integrantes', 'Agrega a la primera persona del grupo.', h('button', { class: 'btn primary', onclick: () => openMember() }, icon('plus'), 'Nuevo integrante'))));
+      ? emptyState('search', 'Sin resultados', 'Prueba con otro nombre o quita el filtro de país.')
+      : emptyState('users', M.group === 'admins' ? 'Aún no hay administradoras' : 'Aún no hay integrantes', 'Agrega a la primera persona del grupo.', h('button', { class: 'btn primary', onclick: () => openMember() }, icon('plus'), 'Nuevo integrante'))));
     if (sel.on && sel.cfg === cfg) { for (const id of [...sel.ids]) if (!cfg.ids().includes(id)) sel.ids.delete(id); selSync(); }
   }
   M.reload = load;
@@ -299,12 +311,18 @@ async function renderMembers(el) {
   fi.onchange = () => { M.inactive = fi.checked; load(); };
   put(el,
     h('div', { class: 'head' }, h('div', { class: 'titlebox' }, h('span', { class: 'tile-ic' }, icon('users')), h('h1', {}, 'Integrantes', count))),
-    memberSections('members'),
+    memberSections('members'), groups,
     h('div', { class: 'toolbar glass' }, h('label', { class: 'input-ic grow' }, icon('search'), q), fc,
-      h('label', { class: 'switch' }, fi, h('span', { class: 'track' }), 'Incluir bajas'), h('span', { class: 'sp' }), selToggleBtn(cfg),
-      h('button', { class: 'btn primary', onclick: () => openMember() }, icon('plus'), 'Nuevo integrante')),
+      h('label', { class: 'switch' }, fi, h('span', { class: 'track' }), 'Incluir bajas'), h('span', { class: 'sp' }), selectButton, addButton),
     grid);
   await load();
+}
+function memberAdminCard(a) {
+  return h('article', { class: 'card member admin', 'data-palette': a.profile_palette || 'default' },
+    profileAvatar(a),
+    h('div', { class: 'who' }, h('h3', {}, a.display_name),
+      h('div', { class: 'badges' }, h('span', { class: 'badge b-aqua' }, 'Administradora')),
+      profileDetails(a)));
 }
 function memberCard(m) {
   const a = age(m.birth_date), bday = m.birth_date && pd(m.birth_date).m === new Date().getMonth() + 1;
@@ -348,7 +366,7 @@ function openMember(m) {
   const d = $('#mdlg'), f = $('#mform'); f._id = m ? m.id : null;
   $('#mdt').textContent = m ? 'Editar integrante' : 'Nuevo integrante';
   $('#m_n').value = m?.nickname || ''; $('#m_b').value = m?.birth_date || ''; memberCountry.set(m?.country); $('#m_phone').value = m?.phone || ''; $('#m_j').value = m?.joined_at || TODAY();
-  $('#m_bias').value = m?.bias || '';
+  $('#m_bias').value = m?.birthday_category || '';
   $('#m_a').checked = m ? !!m.active : true; $('#m_al').hidden = !m; errOf(f).textContent = ''; d.showModal(); $('#m_n').focus();
 }
 $('#mform').addEventListener('submit', e => { e.preventDefault(); const f = e.currentTarget; submitting(f, async () => {
@@ -369,6 +387,8 @@ async function renderEvents(el) {
   };
   cfg.noun = S.kind === 'dynamic' ? ['dinámica', 'dinámicas'] : ['votación', 'votaciones']; cfg.fem = true;
   const count = h('span', { class: 'count-pill' });
+  const selectButton = selToggleBtn(cfg);
+  const addButton = h('button', { class: 'btn primary', onclick: () => openMember() }, icon('plus'), 'Nuevo integrante');
   async function load() {
     E.list = await api('GET', `/api/events?kind=${S.kind}&history=${S.hist ? 1 : 0}`); count.textContent = E.list.length;
     const cards = E.list.map(eventCard);
@@ -562,13 +582,13 @@ async function renderEvDetail(el) {
     selStop(); drawGrid(); toast(`${ids.length} ${plural(ids.length, 'marcado', 'marcados')} como ${p ? 'participaron' : 'no participaron'}. Guarda para confirmar.`, 'info');
   }
   function pcard(m) {
-    const s = marks.get(m.member_id), c = h('article', { class: 'card pcard', tabindex: 0 });
+    const s = marks.get(m.member_id), c = h('article', { class: 'card pcard', tabindex: 0, 'data-palette': m.profile_palette || 'default' });
     const redraw = () => { const n = pcard(m); c.replaceWith(n); };
     const setP = p => { setMark(m.member_id, p, p ? (s && s.p ? s.v : 1) : 0); redraw(); };
     const setV = v => { setMark(m.member_id, true, Math.max(0, Math.min(100000, v))); redraw(); };
     const inp = h('input', { type: 'number', min: 0, max: 100000, step: 1, value: s?.v ?? 0, inputmode: 'numeric', 'aria-label': `Votos de ${m.nickname}`, disabled: !on,
       onchange: ev => { const n = Number(ev.target.value); if (!Number.isInteger(n) || n < 0) { ev.target.value = s.v; return toast('Los votos deben ser un número entero, 0 o más', 'err'); } setV(n); } });
-    c.append(h('div', { class: 'id' }, avatar(m.nickname), h('div', { style: 'min-width:0' }, h('h3', { title: m.nickname }, m.nickname + (m.active ? '' : ' (baja)')), h('div', { class: 'meta' }, m.country ? h('span', {}, icon('globe'), m.country) : null))),
+    c.append(h('div', { class: 'id' }, m.is_admin ? profileAvatar({id:-m.member_id,display_name:m.nickname,has_photo:m.has_photo}) : avatar(m.nickname), h('div', { style: 'min-width:0' }, h('h3', { title: m.nickname }, m.nickname + (m.is_admin ? ' · Administradora' : '') + (m.active ? '' : ' (baja)')), h('div', { class: 'meta' }, m.country ? h('span', {}, icon('globe'), m.country) : null))),
       h('div', { class: 'ctrl' },
         h('div', { class: 'yn', role: 'group', 'aria-label': `Participación de ${m.nickname}` },
           h('button', { class: 'y', 'aria-pressed': String(!!(s && s.p)), disabled: !on, onclick: () => setP(true) }, icon('check'), 'Participó'),
@@ -585,7 +605,7 @@ async function renderEvDetail(el) {
   const bar = on ? h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => openEvForm(e) }, icon('pencil'), 'Editar'), saveBtn,
     h('button', { class: 'btn', onclick: finishEv }, icon('flag'), 'Finalizar'), e.can_delete ? h('button', { class: 'btn danger', onclick: delEv }, icon('trash-2'), 'Eliminar') : null)
     : (e.can_delete ? h('div', { class: 'actions' }, h('button', { class: 'btn danger', onclick: delEv }, icon('trash-2'), 'Eliminar')) : null);
-  const q = h('input', { class: 'input', type: 'search', placeholder: 'Buscar integrante', 'aria-label': 'Buscar integrante', autocomplete: 'off', oninput: debounce(ev => { pq = ev.target.value; drawGrid(); }, 160) });
+  const q = h('input', { class: 'input', type: 'search', placeholder: 'Buscar integrante', 'aria-label': 'Buscar por nombre o apodo', autocomplete: 'off', oninput: debounce(ev => { pq = ev.target.value; drawGrid(); }, 160) });
   put(el,
     h('button', { class: 'btn ghost back', onclick: () => go('events', { kind: e.kind, hist: fin }) }, icon('chevron-left'), k.many),
     e.my_status === 'pending' && !fin ? h('div', { class: 'banner glass' }, icon('mail-open'), h('span', { class: 'grow' }, 'Te invitaron a colaborar en esta ' + k.one + '.'),
@@ -758,7 +778,7 @@ $('#me').onclick = async () => {
     f.reset();
     errOf(f).textContent = '';
     for (const [id, key] of Object.entries({ name: 'display_name', birth: 'profile_birth_date', bias: 'profile_bias', palette: 'profile_palette' })) {
-      $('#profile-' + id).value = p[key] || '';
+      $('#profile-' + id).value = key === 'profile_bias' ? (Object.keys(BIAS_OPTIONS).find(k => BIAS_OPTIONS[k] === p[key]) || '') : (p[key] || '');
     }
     profileCountry.set(p.profile_country);
     $('#profile-birth').max = TODAY();
@@ -825,4 +845,5 @@ function countryPicker(id) {
   };
 }
 const memberCountry = countryPicker('m_c');
+for (const id of ['m_bias','profile-bias']) { const el=$('#'+id); el.replaceChildren(new Option('Sin bias',''),...Object.entries(BIAS_OPTIONS).map(([key,label])=>new Option(label,key))); }
 const profileCountry = countryPicker('profile-country');

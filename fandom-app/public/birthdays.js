@@ -12,7 +12,7 @@ function birthdayField(label, input, hint) {
 }
 
 function birthdayTemplateUrl(template) {
-  return birthdayApi + '/templates/' + encodeURIComponent(template.id) + '?v=' + encodeURIComponent(template.updated_at);
+  return birthdayApi + '/templates/' + encodeURIComponent(template.template_id || template.id) + '?v=' + encodeURIComponent(template.updated_at);
 }
 
 function birthdayBadge(status) {
@@ -121,7 +121,7 @@ function openBirthdayTemplateForm(templates, activeCategory, refresh) {
     close.textContent = 'Cancelar';
     const category = h('select', { class: 'input', required: true },
       h('option', { value: '' }, 'Selecciona un bias'),
-      templates.map(item => h('option', { value: item.id }, item.label)));
+      templates.filter((item,i) => templates.findIndex(x => x.id === item.id) === i).map(item => h('option', { value: item.id }, item.label)));
     category.value = activeCategory || '';
     const file = h('input', { class: 'input', type: 'file', accept: 'image/png,.png', required: true });
     const hint = h('small', { class: 'birthday-muted', 'aria-live': 'polite' });
@@ -132,7 +132,7 @@ function openBirthdayTemplateForm(templates, activeCategory, refresh) {
       h('div', { class: 'dlg-f' }, close, h('button', { class: 'btn primary', type: 'submit' }, 'Guardar plantilla')));
     const updateHint = () => {
       const selected = templates.find(item => item.id === category.value);
-      hint.textContent = selected?.updated_at ? 'El nuevo PNG reemplazará la plantilla de ' + selected.label + '.' : '';
+      hint.textContent = selected ? 'La imagen se añadirá a ' + selected.label + '. Puedes guardar varias.' : '';
     };
     category.onchange = updateHint;
     updateHint();
@@ -190,16 +190,20 @@ async function renderBirthdayAdministration(el) {
 
   if (section === 'templates') {
     panel.append(
-      h('div', { class: 'birthday-panel-heading' }, h('p', { class: 'birthday-muted' }, 'Una imagen por categoría de bias.'),
+      h('div', { class: 'birthday-panel-heading' }, h('p', { class: 'birthday-muted' }, 'Puedes subir varias imágenes por cada bias. Se usarán por turno.'),
         h('button', { class: 'btn primary', onclick: () => openBirthdayTemplateForm(data.templates, '', refresh) },
           icon('plus'), 'Subir plantilla')),
-      h('div', { class: 'birthday-template-grid' }, data.templates.map(item => h('article', { class: 'card birthday-template' },
+      h('div', { class: 'birthday-template-grid' }, data.templates.filter(item => item.template_id).map(item => h('article', { class: 'card birthday-template' },
         h('div', { class: 'birthday-template-media' }, item.updated_at
           ? h('img', { src: birthdayTemplateUrl(item), alt: 'Plantilla de ' + item.label, loading: 'lazy' })
           : h('span', {}, icon('cake'), 'Sin plantilla')),
         h('div', { class: 'birthday-template-info' }, h('h3', {}, item.label),
-          h('button', { class: 'btn', onclick: () => openBirthdayTemplateForm(data.templates, item.id, refresh) },
-            item.updated_at ? 'Reemplazar' : 'Subir'))))));
+          h('button', { class: 'btn', onclick: () => openBirthdayTemplateForm(data.templates, item.id, refresh) }, 'Añadir otra'),
+          h('button', { class: 'btn danger', onclick: async () => {
+            if (!await ask({ title: 'Eliminar plantilla', body: ['Solo se elimina si aún no se utilizó en un cumpleaños.'], ok: 'Eliminar', danger: true, ic: 'trash-2' })) return;
+            try { await api('DELETE', birthdayApi + '/templates/' + item.template_id); toast('Plantilla eliminada'); refresh(); }
+            catch (error) { toast(error.message, 'err'); }
+          } }, 'Eliminar'))))));
     return;
   }
 
